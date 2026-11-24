@@ -16,7 +16,9 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { pingInterval: 10000, pingTimeout: 20000, maxHttpBufferSize: 5e6 });
 
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: res => res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate'),
+}));
 app.get('/qr', async (req, res) => {
   const text = String(req.query.text || '').slice(0, 500);
   if (!text) return res.status(400).end();

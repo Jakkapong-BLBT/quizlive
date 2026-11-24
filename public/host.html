@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>QuizLive — ผู้จัดกิจกรรม</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700;800&display=swap">
 <link rel="stylesheet" href="style.css">
 <style>
   body{min-height:100vh}
@@ -350,12 +352,20 @@ $('#stOk').onclick = () => {
 };
 
 /* ---------------- Socket ---------------- */
-const socket = io({ transports: ['websocket', 'polling'] });
+const socket = io({ tryAllTransports: true, reconnectionDelayMax: 3000 });
 let G = null, gTick = null, lastScreen = '', podiumShown = false, allOpen = false;
 const seenChips = new Set();
 socket.on('connect', () => {
   const h = JSON.parse(sessionStorage.getItem('ql_host') || 'null');
-  if (h) socket.emit('host:rejoin', h, res => { if (res.ok) view('vGame'); else sessionStorage.removeItem('ql_host'); });
+  if (h) socket.emit('host:rejoin', h, res => {
+    if (res.ok) return view('vGame');
+    sessionStorage.removeItem('ql_host');
+    if (!$('#vGame').classList.contains('hidden')) {
+      G = null; view('vLib'); renderLib();
+      alert('ห้องเกมเดิมหมดอายุแล้ว (เซิร์ฟเวอร์เพิ่งรีสตาร์ต หรืออัปเดตระบบ)\nกรุณากด “เริ่มเกม” เพื่อสร้างห้องใหม่ — QR/PIN เดิมใช้ไม่ได้แล้ว');
+    }
+  });
+  else if (!$('#vGame').classList.contains('hidden') && G) { G = null; view('vLib'); renderLib(); alert('การเชื่อมต่อหลุดและห้องเกมเดิมใช้ไม่ได้แล้ว กรุณาสร้างห้องใหม่'); }
 });
 socket.on('host:state', s => { G = s; syncClock(s.now); renderGame(); });
 socket.on('host:answered', d => { if (G) { G.answered = d.answered; const el = $('#gAns'); if (el) el.textContent = d.answered; } });

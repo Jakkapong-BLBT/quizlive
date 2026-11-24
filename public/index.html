@@ -7,7 +7,7 @@
 <title>QuizLive — เข้าร่วมเกม</title>
 <link rel="stylesheet" href="style.css">
 <style>
-  body{display:flex;flex-direction:column;min-height:100dvh}
+  body{display:flex;flex-direction:column;min-height:100dvh;font-family:system-ui,-apple-system,'Segoe UI',Tahoma,sans-serif}
   header{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;background:rgba(0,0,0,.18);font-weight:600}
   header .score{background:#fff;color:var(--ink);border-radius:8px;padding:2px 12px}
   main{flex:1;display:flex;flex-direction:column;padding:16px}
@@ -38,32 +38,29 @@
   .podium{display:flex;gap:8px;align-items:flex-end;justify-content:center;margin:18px 0}
   .podium div{background:rgba(255,255,255,.15);border-radius:8px 8px 0 0;width:30%;padding:8px 4px;font-weight:600;overflow:hidden}
   .podium div b{display:block;font-size:1.6em}
+  .lbl{text-align:left;font-size:.9em;color:var(--muted);font-weight:500;margin-bottom:-6px}
+  .errbox{background:#ffe3e7;color:#b0102b;border-radius:8px;padding:10px;font-weight:600}
+  .netstat{font-size:.85em;color:var(--muted)}
+  .netstat.ok{color:var(--ok)}
   .conn{position:fixed;bottom:8px;left:50%;transform:translateX(-50%);background:#000a;padding:4px 12px;border-radius:20px;font-size:.85em}
 </style>
 </head>
 <body>
 <header><span class="brand">Quiz<b>Live</b></span><span id="hName"></span><span class="score hidden" id="hScore">0</span></header>
 <main>
-  <!-- ใส่ PIN -->
+  <!-- ใส่ PIN + ชื่อ (หน้าเดียว) -->
   <section class="screen center" id="sPin">
     <div class="join">
       <h1 class="brand">Quiz<b>Live</b></h1>
       <div class="card">
-        <input class="big" id="pin" inputmode="numeric" maxlength="6" placeholder="Game PIN" autocomplete="off">
-        <button class="primary" id="btnPin">เข้าร่วม</button>
-        <div class="err" id="errPin"></div>
-      </div>
-    </div>
-  </section>
-  <!-- ใส่ชื่อ -->
-  <section class="screen center hidden" id="sName">
-    <div class="join">
-      <div class="sub" id="quizTitle"></div>
-      <h1 style="font-size:1.8em">ใส่ชื่อของคุณ</h1>
-      <div class="card">
-        <input class="big" id="nick" maxlength="20" placeholder="ชื่อเล่น / ชื่อ-สาขา" autocomplete="off">
-        <button class="primary" id="btnName">ตกลง เข้าเกม!</button>
-        <div class="err" id="errName"></div>
+        <label class="lbl">Game PIN (ตัวเลข 6 หลักบนจอ)</label>
+        <input class="big" id="pin" type="tel" inputmode="numeric" maxlength="6" placeholder="เช่น 373897" autocomplete="off">
+        <label class="lbl">ชื่อของคุณ</label>
+        <input class="big" id="nick" type="text" maxlength="20" placeholder="ชื่อเล่น / ชื่อ-สาขา" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+        <button class="primary" id="btnPin">เข้าเกม!</button>
+        <div class="errbox hidden" id="errPin"></div>
+        <div class="netstat" id="netStat">กำลังเชื่อมต่อเซิร์ฟเวอร์…</div>
+        <div class="netstat" style="opacity:.5">เวอร์ชัน 3</div>
       </div>
     </div>
   </section>
@@ -105,57 +102,66 @@
 <script src="/socket.io/socket.io.js"></script>
 <script src="common.js"></script>
 <script>
-const socket = io({ transports: ['websocket', 'polling'] });
-let session = JSON.parse(localStorage.getItem('ql_session') || 'null'); // {pin, playerId}
-let pendingPin = null, state = null, tick = null, myChoice = null;
+// แสดงข้อผิดพลาดบนจอ (ช่วยแก้ปัญหาหน้างาน)
+window.addEventListener('error', e => { const el = document.getElementById('errPin'); if (el) { el.textContent = 'เกิดข้อผิดพลาด: ' + e.message; el.classList.remove('hidden'); } });
+// บางเบราว์เซอร์ (เช่นที่เปิดใน LINE / Facebook / โหมดส่วนตัว) ห้ามใช้ localStorage → ใช้หน่วยความจำแทน
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+  del(k) { try { localStorage.removeItem(k); } catch {} },
+};
+// เริ่มด้วย polling แล้วอัปเกรดเป็น websocket — เชื่อมต่อได้แม้เครือข่ายบล็อก websocket
+const socket = io({ tryAllTransports: true, reconnectionDelayMax: 3000 });
+let session = null; try { session = JSON.parse(store.get('ql_session') || 'null'); } catch {}
+// ส่งคำสั่งพร้อมรอผล ถ้าไม่ตอบใน 8 วินาทีให้แจ้งผู้เล่น
+function call(ev, data, cb) {
+  if (!socket.connected) return cb({ ok: false, error: 'กำลังเชื่อมต่อเซิร์ฟเวอร์… กรุณารอสักครู่แล้วกดใหม่' });
+  socket.timeout(8000).emit(ev, data, (err, res) => cb(err ? { ok: false, error: 'เซิร์ฟเวอร์ไม่ตอบสนอง ลองกดอีกครั้ง' } : res));
+}
+let state = null, tick = null, myChoice = null;
 
-const screens = ['sPin', 'sName', 'sWait', 'sAnswer', 'sResult', 'sEnd'];
+const screens = ['sPin', 'sWait', 'sAnswer', 'sResult', 'sEnd'];
 function show(id) { screens.forEach(s => $('#' + s).classList.toggle('hidden', s !== id)); document.body.className = ''; }
 
 // PIN จาก QR (?pin=123456)
 const qp = new URLSearchParams(location.search).get('pin');
-if (qp) $('#pin').value = qp;
+if (qp) $('#pin').value = qp.replace(/\D/g, '').slice(0, 6);
 
 socket.on('connect', () => {
   $('#conn').classList.add('hidden');
-  if (session) {
-    socket.emit('player:join', { pin: session.pin, playerId: session.playerId }, res => {
-      if (!res.ok || res.needName) { session = null; localStorage.removeItem('ql_session'); show('sPin'); if (qp) joinPin(); }
+  $('#netStat').textContent = '● เชื่อมต่อเซิร์ฟเวอร์แล้ว'; $('#netStat').classList.add('ok');
+  if (session && (!qp || qp === session.pin)) {
+    call('player:join', { pin: session.pin, playerId: session.playerId }, res => {
+      if (!res.ok || res.needName) { session = null; store.del('ql_session'); show('sPin'); }
     });
-  } else if (qp && !pendingPin) joinPin();
+  }
 });
-socket.on('disconnect', () => $('#conn').classList.remove('hidden'));
+socket.on('disconnect', () => { $('#conn').classList.remove('hidden'); $('#netStat').textContent = 'การเชื่อมต่อหลุด กำลังเชื่อมต่อใหม่…'; $('#netStat').classList.remove('ok'); });
+socket.on('connect_error', () => { $('#netStat').textContent = 'ยังเชื่อมต่อไม่ได้ กำลังลองใหม่…'; $('#netStat').classList.remove('ok'); });
 
-function joinPin() {
+function setErr(msg) { const e = $('#errPin'); e.textContent = msg || ''; e.classList.toggle('hidden', !msg); }
+function joinGame() {
   const pin = $('#pin').value.replace(/\D/g, '');
-  $('#errPin').textContent = '';
-  if (pin.length !== 6) return ($('#errPin').textContent = 'PIN ต้องเป็นตัวเลข 6 หลัก');
-  socket.emit('player:join', { pin }, res => {
-    if (!res.ok) return ($('#errPin').textContent = res.error);
-    pendingPin = pin; $('#quizTitle').textContent = res.title || '';
-    show('sName'); setTimeout(() => $('#nick').focus(), 50);
-  });
-}
-function joinName() {
   const name = $('#nick').value.trim();
-  $('#errName').textContent = '';
-  if (!name) return ($('#errName').textContent = 'กรุณาใส่ชื่อ');
-  $('#btnName').disabled = true;
-  socket.emit('player:join', { pin: pendingPin, name }, res => {
-    $('#btnName').disabled = false;
-    if (!res.ok) return ($('#errName').textContent = res.error);
-    session = { pin: pendingPin, playerId: res.playerId };
-    localStorage.setItem('ql_session', JSON.stringify(session));
+  setErr('');
+  if (pin.length !== 6) return setErr('กรุณาใส่ Game PIN ให้ครบ 6 หลัก (ดูบนจอใหญ่)');
+  if (!name) { $('#nick').focus(); return setErr('กรุณาใส่ชื่อของคุณ'); }
+  $('#btnPin').disabled = true; $('#btnPin').textContent = 'กำลังเข้าเกม…';
+  call('player:join', { pin, name }, res => {
+    $('#btnPin').disabled = false; $('#btnPin').textContent = 'เข้าเกม!';
+    if (!res.ok) return setErr(res.error + (/ไม่พบเกม/.test(res.error) ? ' — ห้องนี้อาจถูกปิดไปแล้ว ให้ผู้จัดสร้างห้องใหม่แล้วสแกน QR ใหม่' : ''));
+    if (res.needName) return setErr('กรุณาใส่ชื่อของคุณ');
+    session = { pin, playerId: res.playerId };
+    store.set('ql_session', JSON.stringify(session));
   });
 }
-$('#btnPin').onclick = joinPin;
-$('#pin').onkeydown = e => e.key === 'Enter' && joinPin();
-$('#btnName').onclick = joinName;
-$('#nick').onkeydown = e => e.key === 'Enter' && joinName();
-$('#btnAgain').onclick = () => { session = null; localStorage.removeItem('ql_session'); location.href = '/'; };
+$('#btnPin').onclick = joinGame;
+$('#pin').onkeydown = e => { if (e.key === 'Enter') $('#nick').focus(); };
+$('#nick').onkeydown = e => { if (e.key === 'Enter') joinGame(); };
+$('#btnAgain').onclick = () => { session = null; store.del('ql_session'); location.href = '/'; };
 
-socket.on('player:kicked', () => { session = null; localStorage.removeItem('ql_session'); show('sPin'); $('#errPin').textContent = 'คุณถูกนำออกจากเกม'; });
-socket.on('player:closed', () => { session = null; localStorage.removeItem('ql_session'); show('sPin'); $('#errPin').textContent = 'ผู้จัดปิดเกมแล้ว'; });
+socket.on('player:kicked', () => { session = null; store.del('ql_session'); show('sPin'); setErr('คุณถูกนำออกจากเกม'); });
+socket.on('player:closed', () => { session = null; store.del('ql_session'); show('sPin'); setErr('ผู้จัดปิดเกมแล้ว'); });
 
 socket.on('player:state', v => {
   const prevKey = state ? state.state + state.qIndex : '';
@@ -210,9 +216,10 @@ function answer(i) {
   myChoice = i;
   [...$('#tiles').children].forEach(b => { b.disabled = true; if (!b.classList.contains('o' + i)) b.classList.add('dim'); });
   if (navigator.vibrate) navigator.vibrate(30);
-  socket.emit('player:answer', i, res => {
+  call('player:answer', i, res => {
     clearInterval(tick);
     if (res.ok) { show('sWait'); $('#waitMsg').textContent = 'ส่งคำตอบแล้ว ⏳'; $('#waitSub').textContent = 'เร็วแค่ไหนนะ? รอดูผล…'; }
+    else if (state && state.state === 'question' && /เชื่อมต่อ|ไม่ตอบสนอง/.test(res.error || '')) { myChoice = null; renderQuestion(state); $('#qLeft').textContent = 'ส่งไม่สำเร็จ ลองกดใหม่'; }
     else { show('sWait'); $('#waitMsg').textContent = res.error || 'ส่งไม่สำเร็จ'; $('#waitSub').textContent = ''; }
   });
 }
