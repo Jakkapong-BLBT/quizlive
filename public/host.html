@@ -189,7 +189,7 @@
 <dialog id="dlgUser">
   <h3 style="margin-top:0" id="uTitle">เพิ่มผู้ใช้</h3>
   <form class="form" id="uForm">
-    <label>ชื่อผู้ใช้ (ภาษาอังกฤษ a-z, 0-9, จุด, ขีด — ใช้ตอนเข้าสู่ระบบ)</label><input id="uName" autocapitalize="off" spellcheck="false" placeholder="เช่น somchai.kat">
+    <label>ชื่อผู้ใช้ (ภาษาอังกฤษ a-z, 0-9, จุด, ขีด — ใช้ตอนเข้าสู่ระบบ)</label><input id="uName" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" placeholder="เช่น somchai.kat">
     <label>ชื่อที่แสดง</label><input id="uDisp" placeholder="เช่น สมชาย (HR Katsuya)">
     <label>สิทธิ์</label><select id="uRole"><option value="organizer">ผู้จัด (Organizer)</option><option value="super">Super Admin</option></select>
     <label>อายุการใช้งานบัญชี</label>
@@ -862,6 +862,8 @@ $('#uForm').onsubmit = async e => {
     if (exp && exp < Date.now()) throw new Error('วันสิ้นสุดต้องเป็นวันนี้หรืออนาคต');
     if (editUser) await api('PATCH', '/api/users/' + editUser.id, { displayName: $('#uDisp').value, ...(editUser.id === ME.id ? {} : { role: $('#uRole').value }), ...(exp !== undefined && editUser.id !== ME.id ? { expiresAt: exp } : {}) });
     else {
+      const bad = [...$('#uName').value.normalize('NFKC').replace(/[๐-๙\s\u200B-\u200F\u2060\uFEFF\u00AD]/g, '').toLowerCase()].filter(ch => !/[a-z0-9._-]/.test(ch));
+      if (bad.length) throw new Error(`ชื่อผู้ใช้มีอักขระที่ใช้ไม่ได้: ${[...new Set(bad)].map(c => `“${c}”`).join(' ')} — ใช้ได้เฉพาะ a-z, 0-9, จุด, ขีด`);
       await api('POST', '/api/users', { username: $('#uName').value, displayName: $('#uDisp').value, role: $('#uRole').value, password: $('#uPw').value, expiresAt: exp });
       showCred($('#uName').value.trim().toLowerCase(), $('#uPw').value, exp);
     }
