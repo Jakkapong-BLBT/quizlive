@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>QuizLive — แบบประเมิน</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="style.css">
+<style>
+  .fc{display:flex;flex-direction:column;gap:10px}
+  .fc h3{margin:0;font-size:1.2em}
+  .qe{margin-top:14px;display:flex;flex-direction:column;gap:10px}
+  .qe .head{display:flex;gap:8px;align-items:center}
+  .qe .head b{background:var(--bg2);color:#fff;border-radius:8px;padding:2px 10px}
+  .qe .head .sp{flex:1}
+  .qe .head button{background:#eef;box-shadow:none;padding:.35em .7em}
+  .qe select.inp{width:auto}
+  .tpl{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .tpl button{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;background:#f4f2fb;box-shadow:none;padding:14px}
+  .tpl button small{font-weight:400;color:var(--muted)}
+  .res{display:flex;flex-direction:column;gap:14px}
+  .rq{display:flex;flex-direction:column;gap:10px}
+  .rq h4{margin:0}
+  .avg{display:flex;align-items:baseline;gap:10px}
+  .avg big{font-size:2.6em;font-weight:800;color:var(--bg2);line-height:1}
+  .bars{display:flex;flex-direction:column;gap:6px}
+  .bar2{display:grid;grid-template-columns:minmax(90px,220px) 1fr 90px;gap:10px;align-items:center}
+  .bar2 .t{font-size:.95em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .bar2 .b{height:22px;background:#eeecf6;border-radius:6px;overflow:hidden}
+  .bar2 .b i{display:block;height:100%;background:var(--bg2);border-radius:6px;transition:width .5s}
+  .bar2 .n{text-align:right;color:var(--muted);font-size:.9em}
+  .txts{max-height:320px;overflow:auto;display:flex;flex-direction:column;gap:6px}
+  .txts div{background:#f7f6fb;border-radius:8px;padding:8px 12px}
+  .txts small{color:var(--muted)}
+  .stat{display:flex;gap:14px;flex-wrap:wrap}
+  .stat .card{flex:1;min-width:180px;text-align:center;padding:16px}
+  .stat big{display:block;font-size:2.2em;font-weight:800;color:var(--bg2)}
+  .qrfull{position:fixed;inset:0;background:linear-gradient(160deg,var(--bg2),var(--bg));z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;text-align:center;padding:20px}
+  .qrfull .card{display:flex;gap:30px;align-items:center;padding:28px 36px}
+  .qrfull img{width:min(42vh,340px);height:min(42vh,340px)}
+  .qrfull .code{font-size:4em;font-weight:800;letter-spacing:4px;color:var(--bg2);line-height:1}
+</style>
+</head>
+<body>
+<div class="nav" id="nav"></div>
+
+<!-- รายการ -->
+<div id="vList" class="wrap">
+  <div class="toolbar"><h2>📝 แบบประเมิน</h2><button class="go" id="btnNew">+ สร้างแบบประเมินใหม่</button></div>
+  <div class="grid" id="list"><div class="empty">กำลังโหลด…</div></div>
+</div>
+
+<dialog id="dlgTpl">
+  <h3 style="margin-top:0">เริ่มจาก…</h3>
+  <div class="tpl">
+    <button data-t="training"><b>📚 แบบประเมินการอบรม</b><small>ความพึงพอใจ, เนื้อหา, วิทยากร, ระยะเวลา, การนำไปใช้, ข้อเสนอแนะ</small></button>
+    <button data-t="event"><b>🎉 ความพึงพอใจกิจกรรม</b><small>ภาพรวม, การจัดงาน, จะเข้าร่วมอีกไหม, สิ่งที่ชอบ, ข้อเสนอแนะ</small></button>
+    <button data-t="blank"><b>➕ แบบว่าง</b><small>สร้างคำถามเองทั้งหมด</small></button>
+  </div>
+  <div class="row" style="justify-content:flex-end;margin-top:14px"><button id="tplCancel">ยกเลิก</button></div>
+</dialog>
+
+<!-- ตัวแก้ไข -->
+<div id="vEdit" class="wrap hidden">
+  <div class="toolbar"><button class="ghost" id="edBack">← กลับ</button><h2>แก้ไขแบบประเมิน</h2><button class="go" id="edSave">บันทึก</button></div>
+  <div class="card fc">
+    <div class="fld"><label>ชื่อแบบประเมิน</label><input class="inp" id="edTitle" style="font-size:1.2em;font-weight:600"></div>
+    <div class="fld"><label>คำอธิบาย (ไม่บังคับ)</label><textarea class="inp" id="edDesc" rows="2" placeholder="เช่น ขอบคุณที่เข้าร่วมอบรม People Manager Series หัวข้อที่ 3 — ใช้เวลาตอบ 2 นาที"></textarea></div>
+    <div class="row">
+      <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="edAsk" style="width:18px;height:18px"> ถามชื่อผู้ตอบ</label>
+      <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="edNameReq" style="width:18px;height:18px"> บังคับใส่ชื่อ</label>
+      <span class="lbl2">(ไม่ติ๊ก “ถามชื่อ” = ตอบแบบไม่ระบุตัวตน)</span>
+    </div>
+  </div>
+  <div id="edWarn" class="card hidden" style="margin-top:14px;background:#fff4d6;color:#6b4e00"></div>
+  <div id="qList"></div>
+  <div class="row" style="margin-top:16px">
+    <button data-add="rating">+ ⭐ ให้คะแนน 1–5</button><button data-add="choice">+ ◉ เลือก 1 ข้อ</button>
+    <button data-add="multi">+ ☑ เลือกได้หลายข้อ</button><button data-add="text">+ ✎ ข้อความ</button>
+  </div>
+</div>
+
+<!-- ผลสรุป -->
+<div id="vRes" class="wrap hidden">
+  <div class="toolbar"><button class="ghost" id="rsBack">← กลับ</button><h2 id="rsTitle"></h2></div>
+  <div class="row" style="margin-bottom:14px">
+    <button class="go" id="rsOpen"></button>
+    <button class="primary" id="rsQr">📱 แสดง QR บนจอ</button>
+    <button id="rsCopy">คัดลอกลิงก์</button>
+    <button id="rsCsv">⬇ ดาวน์โหลดผล (Excel/CSV)</button>
+    <button id="rsEdit">แก้ไขคำถาม</button>
+    <button class="small danger" id="rsClear">ลบคำตอบทั้งหมด</button>
+  </div>
+  <div class="res" id="rsBody"></div>
+</div>
+<div class="qrfull hidden" id="qrFull"></div>
+
+<script src="nav.js"></script>
+<script>
+let F = null, ED = null, pollT = null;
+const TYPE_L = { rating: '⭐ ให้คะแนน 1–5', choice: '◉ เลือก 1 ข้อ', multi: '☑ เลือกได้หลายข้อ', text: '✎ ข้อความ' };
+const RATE_L = ['', 'น้อยที่สุด', 'น้อย', 'ปานกลาง', 'มาก', 'มากที่สุด'];
+const view = id => { ['vList', 'vEdit', 'vRes'].forEach(v => $('#' + v).classList.toggle('hidden', v !== id)); if (id !== 'vRes') stopPoll(); window.scrollTo(0, 0); };
+const formUrl = code => `${location.origin}/form.html?c=${code}`;
+const TPL = {
+  training: { title: 'แบบประเมินการอบรม', description: 'ขอบคุณที่เข้าร่วมการอบรม ความเห็นของคุณจะช่วยพัฒนาหลักสูตรครั้งต่อไป', askName: false, questions: [
+    { type: 'rating', text: 'ความพึงพอใจโดยรวมต่อการอบรมครั้งนี้', required: true },
+    { type: 'rating', text: 'เนื้อหาตรงกับงานที่ทำและเป็นประโยชน์', required: true },
+    { type: 'rating', text: 'วิทยากรถ่ายทอดได้ชัดเจน เข้าใจง่าย', required: true },
+    { type: 'choice', text: 'ระยะเวลาการอบรม', options: ['สั้นเกินไป', 'เหมาะสม', 'ยาวเกินไป'], required: true },
+    { type: 'rating', text: 'สามารถนำความรู้ไปใช้ในงานได้จริง', required: true },
+    { type: 'multi', text: 'หัวข้อที่อยากให้จัดอบรมเพิ่ม', options: ['กฎหมายแรงงาน', 'การบริหารทีม', 'การสื่อสารและการให้ Feedback', 'การบริการลูกค้า', 'ความปลอดภัยในการทำงาน'], required: false },
+    { type: 'text', text: 'ข้อเสนอแนะเพิ่มเติม', required: false },
+  ] },
+  event: { title: 'แบบประเมินความพึงพอใจกิจกรรม', description: '', askName: false, questions: [
+    { type: 'rating', text: 'ความพึงพอใจโดยรวมต่อกิจกรรม', required: true },
+    { type: 'rating', text: 'ความเหมาะสมของการจัดงาน (สถานที่ เวลา อาหาร)', required: true },
+    { type: 'choice', text: 'ถ้ามีกิจกรรมแบบนี้อีก จะเข้าร่วมไหม', options: ['เข้าร่วมแน่นอน', 'ไม่แน่ใจ', 'ไม่เข้าร่วม'], required: true },
+    { type: 'text', text: 'ช่วงที่ชอบที่สุดในกิจกรรมนี้', required: false },
+    { type: 'text', text: 'ข้อเสนอแนะ', required: false },
+  ] },
+  blank: { title: 'แบบประเมินใหม่', description: '', askName: false, questions: [{ type: 'rating', text: '', required: true }] },
+};
+
+/* ---------- รายการ ---------- */
+async function renderList() {
+  view('vList');
+  const { forms } = await api('GET', '/api/forms');
+  const sup = ME.role === 'super';
+  $('#list').innerHTML = forms.length ? forms.map(f => `<div class="card fc">
+    <h3>${esc(f.title)}</h3>
+    <div class="row">${f.open ? '<span class="pill ok">● เปิดรับคำตอบ</span>' : '<span class="pill no">ปิดรับ</span>'}<span class="meta">${f.questionCount} ข้อ • ตอบแล้ว <b>${fmt(f.responses)}</b> คน</span></div>
+    <div class="meta" style="font-size:.85em">รหัส ${f.code} • แก้ไขล่าสุด ${dt(f.updated)}</div>
+    ${sup ? `<div><span class="owner">${f.mine ? 'ของฉัน' : 'โดย ' + esc(f.ownerName)}</span></div>` : ''}
+    <div class="row"><button class="primary" data-a="res" data-id="${f.id}">📊 ผล / เปิดรับ</button><button data-a="edit" data-id="${f.id}">แก้ไข</button>
+      <button class="small" data-a="dup" data-id="${f.id}">ทำสำเนา</button><button class="small danger" data-a="del" data-id="${f.id}">ลบ</button></div></div>`).join('')
+    : '<div class="empty">ยังไม่มีแบบประเมิน — กด “สร้างแบบประเมินใหม่” แล้วเลือกแม่แบบ “แบบประเมินการอบรม” เพื่อเริ่มได้ทันที</div>';
+}
+$('#list').onclick = async e => {
+  const b = e.target.closest('button[data-a]'); if (!b) return;
+  const id = b.dataset.id;
+  try {
+    if (b.dataset.a === 'res') openRes(id);
+    if (b.dataset.a === 'edit') openEdit(id);
+    if (b.dataset.a === 'dup') { const f = await api('GET', '/api/forms/' + id); await api('POST', '/api/forms', { title: f.title + ' (สำเนา)', description: f.description, askName: f.askName, nameRequired: f.nameRequired, questions: f.questions }); renderList(); }
+    if (b.dataset.a === 'del' && confirm('ลบแบบประเมินนี้พร้อมคำตอบทั้งหมด? (กู้คืนไม่ได้)')) { await api('DELETE', '/api/forms/' + id); renderList(); }
+  } catch (ex) { alert(ex.message); }
+};
+$('#btnNew').onclick = () => $('#dlgTpl').showModal();
+$('#tplCancel').onclick = () => $('#dlgTpl').close();
+document.querySelectorAll('#dlgTpl [data-t]').forEach(b => b.onclick = async () => {
+  $('#dlgTpl').close();
+  const t = JSON.parse(JSON.stringify(TPL[b.dataset.t]));
+  try {
+    if (b.dataset.t === 'blank') { ED = { id: null, ...t, responses: [] }; return renderEdit(); }
+    const r = await api('POST', '/api/forms', t); openEdit(r.id);
+  } catch (e) { alert(e.message); }
+});
+
+/* ---------- ตัวแก้ไข ---------- */
+async function openEdit(id) {
+  try { ED = await api('GET', '/api/forms/' + id); } catch (e) { return alert(e.message); }
+  renderEdit();
+}
+function renderEdit() {
+  view('vEdit');
+  $('#edTitle').value = ED.title; $('#edDesc').value = ED.description || '';
+  $('#edAsk').checked = !!ED.askName; $('#edNameReq').checked = !!ED.nameRequired;
+  const locked = (ED.responses || []).length;
+  $('#edWarn').classList.toggle('hidden', !locked);
+  $('#edWarn').textContent = locked ? `มีผู้ตอบแล้ว ${locked} คน — แก้ได้เฉพาะข้อความ (เพิ่ม/ลบคำถามหรือตัวเลือกไม่ได้ เพื่อไม่ให้ผลสรุปเพี้ยน) ถ้าต้องการเปลี่ยนโครงสร้าง ให้ “ทำสำเนา”` : '';
+  document.querySelectorAll('[data-add]').forEach(b => b.disabled = !!locked);
+  renderQs();
+}
+function renderQs() {
+  const locked = (ED.responses || []).length;
+  $('#qList').innerHTML = ED.questions.map((q, i) => `<div class="card qe" data-i="${i}">
+    <div class="head"><b>ข้อ ${i + 1}</b><select class="inp" data-f="type" ${locked ? 'disabled' : ''}>${Object.entries(TYPE_L).map(([k, v]) => `<option value="${k}" ${q.type === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
+      <label style="display:flex;gap:4px;align-items:center;font-size:.9em"><input type="checkbox" data-f="required" ${q.required !== false ? 'checked' : ''}> บังคับตอบ</label>
+      <span class="sp"></span>${locked ? '' : `<button data-a="up">↑</button><button data-a="down">↓</button><button data-a="rm">🗑</button>`}</div>
+    <input class="inp" data-f="text" value="${esc(q.text)}" placeholder="พิมพ์คำถาม…">
+    ${['choice', 'multi'].includes(q.type) ? `<div class="fld"><label>ตัวเลือก (1 บรรทัด = 1 ตัวเลือก, อย่างน้อย 2)</label><textarea class="inp" data-f="options" rows="${Math.max(3, (q.options || []).length + 1)}">${esc((q.options || []).join('\n'))}</textarea></div>` : ''}
+    ${q.type === 'rating' ? `<div class="lbl2">ผู้ตอบเลือก 1 (${RATE_L[1]}) ถึง 5 (${RATE_L[5]})</div>` : ''}
+  </div>`).join('');
+}
+$('#qList').addEventListener('input', e => {
+  const c = e.target.closest('.qe'); if (!c) return;
+  const q = ED.questions[c.dataset.i], f = e.target.dataset.f;
+  if (f === 'text') q.text = e.target.value;
+  if (f === 'options') q.options = e.target.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+});
+$('#qList').addEventListener('change', e => {
+  const c = e.target.closest('.qe'); if (!c) return;
+  const q = ED.questions[c.dataset.i], f = e.target.dataset.f;
+  if (f === 'required') q.required = e.target.checked;
+  if (f === 'type') { q.type = e.target.value; if (['choice', 'multi'].includes(q.type) && !(q.options || []).length) q.options = ['', '']; renderQs(); }
+});
+$('#qList').addEventListener('click', e => {
+  const b = e.target.closest('button[data-a]'); if (!b) return;
+  const i = +b.closest('.qe').dataset.i, qs = ED.questions;
+  if (b.dataset.a === 'up' && i > 0) [qs[i - 1], qs[i]] = [qs[i], qs[i - 1]];
+  if (b.dataset.a === 'down' && i < qs.length - 1) [qs[i + 1], qs[i]] = [qs[i], qs[i + 1]];
+  if (b.dataset.a === 'rm' && confirm('ลบคำถามข้อนี้?')) qs.splice(i, 1);
+  renderQs();
+});
+document.querySelectorAll('[data-add]').forEach(b => b.onclick = () => {
+  const t = b.dataset.add;
+  ED.questions.push({ type: t, text: '', required: t !== 'text', options: ['choice', 'multi'].includes(t) ? ['', ''] : [] });
+  renderQs(); window.scrollTo(0, document.body.scrollHeight);
+});
+async function saveEdit() {
+  const body = { title: $('#edTitle').value.trim() || 'แบบประเมิน', description: $('#edDesc').value, askName: $('#edAsk').checked, nameRequired: $('#edNameReq').checked,
+    questions: ED.questions.map(q => ({ ...q, options: (q.options || []).filter(o => o.trim()) })) };
+  const bad = body.questions.findIndex(q => !q.text.trim() || (['choice', 'multi'].includes(q.type) && q.options.length < 2));
+  if (bad >= 0) throw new Error(`ข้อ ${bad + 1} ยังไม่สมบูรณ์ (ต้องมีคำถาม และตัวเลือกอย่างน้อย 2 ข้อ)`);
+  if (!body.questions.length) throw new Error('ยังไม่มีคำถาม');
+  if (ED.id) await api('PUT', '/api/forms/' + ED.id, body); else ED.id = (await api('POST', '/api/forms', body)).id;
+}
+$('#edSave').onclick = async () => { try { await saveEdit(); openRes(ED.id); } catch (e) { alert(e.message); } };
+$('#edBack').onclick = () => { if (confirm('กลับโดยไม่บันทึก?')) renderList(); };
+$('#edAsk').onchange = () => { if (!$('#edAsk').checked) $('#edNameReq').checked = false; };
+$('#edNameReq').onchange = () => { if ($('#edNameReq').checked) $('#edAsk').checked = true; };
+
+/* ---------- ผลสรุป ---------- */
+async function openRes(id) {
+  try { F = await api('GET', '/api/forms/' + id); } catch (e) { return alert(e.message); }
+  view('vRes'); renderRes(); startPoll();
+}
+function startPoll() { stopPoll(); pollT = setInterval(async () => { if (!F || !F.open) return; try { F = await api('GET', '/api/forms/' + F.id); renderRes(); } catch {} }, 4000); }
+function stopPoll() { clearInterval(pollT); pollT = null; }
+function bars(items, total) {
+  return `<div class="bars">${items.map(([t, n]) => { const p = total ? Math.round(n / total * 100) : 0; return `<div class="bar2"><span class="t" title="${esc(t)}">${esc(t)}</span><span class="b"><i style="width:${p}%"></i></span><span class="n">${n} (${p}%)</span></div>`; }).join('')}</div>`;
+}
+function summarize(q, i) {
+  const vals = F.responses.map(r => r.answers[i]).filter(v => v !== null && v !== undefined);
+  if (q.type === 'rating') {
+    const avg = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+    return { avg, html: `<div class="avg"><big>${vals.length ? avg.toFixed(2) : '-'}</big><span>/ 5 • ${'★'.repeat(Math.round(avg))}${'☆'.repeat(5 - Math.round(avg))} • ตอบ ${vals.length} คน</span></div>
+      ${bars([5, 4, 3, 2, 1].map(n => [`${n} — ${RATE_L[n]}`, vals.filter(v => v === n).length]), vals.length)}` };
+  }
+  if (q.type === 'choice') return { html: bars(q.options.map((o, k) => [o, vals.filter(v => v === k).length]), vals.length) + `<div class="lbl2">ตอบ ${vals.length} คน</div>` };
+  if (q.type === 'multi') return { html: bars(q.options.map((o, k) => [o, vals.filter(v => v.includes(k)).length]), vals.length) + `<div class="lbl2">ตอบ ${vals.length} คน (เลือกได้หลายข้อ — % คิดจากจำนวนผู้ตอบ)</div>` };
+  const rs = F.responses.filter(r => r.answers[i]);
+  return { html: rs.length ? `<div class="txts">${rs.slice().reverse().map(r => `<div>${esc(r.answers[i])}${r.name ? `<br><small>— ${esc(r.name)}</small>` : ''}</div>`).join('')}</div>` : '<div class="lbl2">ยังไม่มีคำตอบ</div>' };
+}
+function renderRes() {
+  $('#rsTitle').textContent = F.title;
+  $('#rsOpen').textContent = F.open ? '⏸ ปิดรับคำตอบ' : '▶ เปิดรับคำตอบ';
+  $('#rsOpen').className = F.open ? 'danger' : 'go';
+  const n = F.responses.length;
+  const sums = F.questions.map((q, i) => ({ q, i, ...summarize(q, i) }));
+  const ratings = sums.filter(s => s.q.type === 'rating' && s.avg);
+  const overall = ratings.length ? ratings.reduce((a, s) => a + s.avg, 0) / ratings.length : 0;
+  const last = n ? dt(Math.max(...F.responses.map(r => r.at))) : '-';
+  $('#rsBody').innerHTML = `<div class="stat">
+      <div class="card">ผู้ตอบทั้งหมด<big>${fmt(n)}</big></div>
+      <div class="card">คะแนนเฉลี่ย (ข้อให้คะแนน)<big>${overall ? overall.toFixed(2) : '-'}</big><span class="lbl2">${overall ? `${(overall / 5 * 100).toFixed(1)}%` : ''}</span></div>
+      <div class="card">สถานะ<big style="font-size:1.4em;margin:10px 0">${F.open ? '🟢 เปิดรับ' : '⚪ ปิดรับ'}</big><span class="lbl2">ตอบล่าสุด ${last}</span></div></div>
+    ${sums.map(s => `<div class="card rq"><h4>ข้อ ${s.i + 1}. ${esc(s.q.text)} <span class="lbl2" style="font-weight:400">${TYPE_L[s.q.type]}</span></h4>${s.html}</div>`).join('')}`;
+  const qf = $('#qrFull'); if (!qf.classList.contains('hidden')) $('#qrCount').textContent = fmt(n);
+}
+$('#rsBack').onclick = () => renderList();
+$('#rsEdit').onclick = () => openEdit(F.id);
+$('#rsOpen').onclick = async () => { try { await api('POST', `/api/forms/${F.id}/open`, { open: !F.open }); F = await api('GET', '/api/forms/' + F.id); renderRes(); } catch (e) { alert(e.message); } };
+$('#rsCopy').onclick = () => navigator.clipboard?.writeText(formUrl(F.code)).then(() => { $('#rsCopy').textContent = 'คัดลอกแล้ว ✓'; setTimeout(() => $('#rsCopy').textContent = 'คัดลอกลิงก์', 1500); });
+$('#rsClear').onclick = async () => { if (!F.responses.length || !confirm(`ลบคำตอบทั้งหมด ${F.responses.length} รายการ? (กู้คืนไม่ได้ — แนะนำดาวน์โหลด CSV ก่อน)`)) return; await api('DELETE', `/api/forms/${F.id}/responses`); F = await api('GET', '/api/forms/' + F.id); renderRes(); };
+$('#rsQr').onclick = async () => {
+  if (!F.open && confirm('แบบประเมินยังปิดรับอยู่ — เปิดรับคำตอบเลยไหม?')) { await api('POST', `/api/forms/${F.id}/open`, { open: true }); F = await api('GET', '/api/forms/' + F.id); renderRes(); }
+  const qf = $('#qrFull'), url = formUrl(F.code);
+  qf.innerHTML = `<h1 style="margin:0;font-size:2.4em">📝 ${esc(F.title)}</h1>
+    <div class="card"><img src="/qr?text=${encodeURIComponent(url)}" alt="QR"><div style="text-align:left"><div class="lbl2">สแกน QR หรือเปิด</div><div style="font-size:1.4em;font-weight:600;color:var(--bg2)">${esc(url.replace(/^https?:\/\//, ''))}</div>
+      <div class="lbl2" style="margin-top:14px">ตอบแล้ว</div><div class="code" id="qrCount">${fmt(F.responses.length)}</div><div class="lbl2">คน</div></div></div>
+    <div class="row"><button class="ghost" id="qrFs">⛶ เต็มจอ</button><button id="qrClose">ปิด</button></div>`;
+  qf.classList.remove('hidden');
+  $('#qrClose').onclick = () => { qf.classList.add('hidden'); if (document.fullscreenElement) document.exitFullscreen(); };
+  $('#qrFs').onclick = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.();
+};
+$('#rsCsv').onclick = () => {
+  const qs = F.questions;
+  const ans = (q, v) => v === null || v === undefined ? '' : q.type === 'choice' ? q.options[v] : q.type === 'multi' ? v.map(k => q.options[k]).join('; ') : v;
+  const rows = [[`แบบประเมิน: ${F.title}`, `ผู้ตอบ: ${F.responses.length} คน`, `ดาวน์โหลดเมื่อ: ${new Date().toLocaleString('th-TH')}`], [],
+    ['ลำดับ', 'เวลาที่ตอบ', 'ชื่อ', ...qs.map((q, i) => `ข้อ ${i + 1}. ${q.text}`)],
+    ...F.responses.map((r, k) => [k + 1, new Date(r.at).toLocaleString('th-TH'), r.name || (F.askName ? '' : '(ไม่ระบุตัวตน)'), ...qs.map((q, i) => ans(q, r.answers[i]))]),
+    [], ['สรุปรายข้อ'], ['ข้อ', 'คำถาม', 'ชนิด', 'จำนวนผู้ตอบ', 'ค่าเฉลี่ย / รายละเอียด']];
+  qs.forEach((q, i) => {
+    const vals = F.responses.map(r => r.answers[i]).filter(v => v !== null && v !== undefined);
+    let detail = '';
+    if (q.type === 'rating') detail = vals.length ? (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2) + ' / 5' : '-';
+    if (q.type === 'choice') detail = q.options.map((o, k) => `${o}: ${vals.filter(v => v === k).length}`).join(' | ');
+    if (q.type === 'multi') detail = q.options.map((o, k) => `${o}: ${vals.filter(v => v.includes(k)).length}`).join(' | ');
+    if (q.type === 'text') detail = `${vals.length} ความเห็น`;
+    rows.push([i + 1, q.text, TYPE_L[q.type].replace(/^\S+ /, ''), vals.length, detail]);
+  });
+  download(`ผลประเมิน_${F.title}_${new Date().toISOString().slice(0, 10)}.csv`, toCsv(rows), 'text/csv;charset=utf-8');
+};
+
+bootNav('forms').then(renderList).catch(e => { if (!/เข้าสู่ระบบ/.test(e.message)) alert(e.message); });
+</script>
+</body>
+</html>

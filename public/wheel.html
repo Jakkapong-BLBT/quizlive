@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>QuizLive — วงล้อสุ่มโชค</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="style.css">
+<style>
+  .wc{display:flex;flex-direction:column;gap:10px}
+  .wc h3{margin:0;font-size:1.25em}
+  .ed{display:grid;grid-template-columns:1.2fr 1fr;gap:16px;align-items:start}
+  @media(max-width:900px){.ed{grid-template-columns:1fr}}
+  .ed .card{display:flex;flex-direction:column;gap:12px}
+  #entries{min-height:300px;font-family:inherit;line-height:1.5}
+  .prz{display:flex;gap:8px;align-items:center}
+  .prz input[type=number]{width:90px}
+  .regbox{display:flex;gap:16px;align-items:center;background:#f4f2fb;border-radius:10px;padding:12px}
+  .regbox img{width:130px;height:130px;background:#fff;border-radius:8px}
+  .regbox .code{font-size:2em;font-weight:800;letter-spacing:3px;color:var(--bg2)}
+  /* หน้าจับรางวัล */
+  .stage{min-height:100vh;display:flex;flex-direction:column}
+  .sbar{display:flex;align-items:center;gap:12px;padding:10px 22px;background:rgba(0,0,0,.25);font-weight:600;flex-wrap:wrap}
+  .sbar .sp{flex:1}
+  .smain{flex:1;display:grid;grid-template-columns:1fr 380px;gap:20px;padding:18px 26px;align-items:center}
+  @media(max-width:1000px){.smain{grid-template-columns:1fr}}
+  .wheelwrap{position:relative;display:flex;justify-content:center;align-items:center}
+  #wheel{width:min(78vh,92vw,760px);height:min(78vh,92vw,760px);border-radius:50%;box-shadow:0 0 0 10px rgba(255,255,255,.15),0 20px 60px rgba(0,0,0,.45)}
+  .pointer{position:absolute;top:-14px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:26px solid transparent;border-right:26px solid transparent;border-top:52px solid var(--accent);filter:drop-shadow(0 4px 4px rgba(0,0,0,.4));z-index:2}
+  .hub{position:absolute;width:110px;height:110px;border-radius:50%;background:#fff;color:var(--bg2);display:grid;place-items:center;font-weight:800;font-size:1.4em;box-shadow:0 4px 14px rgba(0,0,0,.35);cursor:pointer;border:6px solid var(--accent);user-select:none}
+  .slot{width:min(90vw,820px);background:#fff;color:var(--ink);border-radius:24px;padding:40px 20px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.45);border:8px solid var(--accent)}
+  .slot .nm{font-size:clamp(2.2em,6vw,4.4em);font-weight:800;min-height:1.3em;line-height:1.3;word-break:break-word}
+  .slot .sub{color:var(--muted);margin-top:8px}
+  .side{display:flex;flex-direction:column;gap:12px}
+  .side .card{padding:16px}
+  .side h4{margin:0 0 8px}
+  .plist{display:flex;flex-direction:column;gap:6px}
+  .pbtn{display:flex;justify-content:space-between;align-items:center;text-align:left;background:#f4f2fb;box-shadow:none;padding:.6em .8em}
+  .pbtn.on{background:var(--bg2);color:#fff}
+  .pbtn:disabled{opacity:.45}
+  .spinbtn{font-size:1.6em;padding:.6em;width:100%;background:var(--accent);color:var(--ink)}
+  .wl{max-height:34vh;overflow:auto;display:flex;flex-direction:column;gap:6px}
+  .wi{display:flex;gap:8px;align-items:center;background:#f7f6fb;border-radius:8px;padding:8px 10px}
+  .wi .tx{flex:1;min-width:0}
+  .wi .n{font-weight:700;font-size:1.1em}
+  .wi .p{font-size:.85em;color:var(--muted)}
+  .wi.void .n{text-decoration:line-through;opacity:.5}
+  .overlay{position:fixed;inset:0;background:rgba(20,6,50,.82);display:flex;align-items:center;justify-content:center;z-index:10}
+  .win{background:#fff;color:var(--ink);border-radius:24px;padding:36px 40px;text-align:center;width:min(760px,92vw);animation:pop .5s ease both;border:8px solid var(--accent)}
+  .win .pz{font-size:1.4em;color:var(--bg2);font-weight:700}
+  .win .nm{font-size:clamp(2.4em,7vw,4.6em);font-weight:800;margin:10px 0 20px;word-break:break-word}
+  .confetti{position:fixed;inset:0;pointer-events:none;z-index:11}
+  .regmini{display:flex;gap:10px;align-items:center}
+  .regmini img{width:110px;height:110px;border-radius:8px;background:#fff}
+</style>
+</head>
+<body>
+<div class="nav" id="nav"></div>
+
+<!-- รายการวงล้อ -->
+<div id="vList" class="wrap">
+  <div class="toolbar"><h2>🎡 วงล้อสุ่มโชค</h2><button class="go" id="btnNew">+ สร้างวงล้อใหม่</button></div>
+  <div class="grid" id="list"><div class="empty">กำลังโหลด…</div></div>
+</div>
+
+<!-- ตั้งค่าวงล้อ -->
+<div id="vEdit" class="wrap hidden">
+  <div class="toolbar"><button class="ghost" id="edBack">← กลับ</button><h2 id="edHead">ตั้งค่าวงล้อ</h2>
+    <button class="go" id="edSave">บันทึก</button><button class="primary" id="edGo">▶ ไปหน้าจับรางวัล</button></div>
+  <div class="ed">
+    <div class="card">
+      <div class="fld"><label>ชื่อกิจกรรม</label><input class="inp" id="edTitle" placeholder="เช่น จับรางวัลงานเลี้ยงปีใหม่ 2027"></div>
+      <div class="fld"><label>รายชื่อผู้มีสิทธิ์ลุ้น (1 บรรทัด = 1 คน — วางจาก Excel ได้)  <b id="edCount"></b></label>
+        <textarea class="inp" id="entries" placeholder="สมชาย ใจดี&#10;Nida (KAT)&#10;ต้น PL สาขาเซ็นทรัลเวิลด์"></textarea></div>
+      <div class="row">
+        <button class="small" id="btnFromGame">📥 ดึงรายชื่อจากผลเกม Quiz</button>
+        <button class="small" id="btnSort">เรียง ก-ฮ</button>
+        <button class="small" id="btnShuffle">สลับลำดับ</button>
+        <button class="small danger" id="btnClear">ล้างรายชื่อ</button>
+      </div>
+      <div class="fld"><label>ลงชื่อร่วมลุ้นด้วยตัวเอง (สแกน QR)</label>
+        <div id="regArea"></div></div>
+    </div>
+    <div class="card">
+      <h3 style="margin:0">🎁 รางวัล</h3>
+      <div class="lbl2">ตั้งชื่อรางวัลและจำนวน — ไม่ใส่ก็ได้ (หมุนแบบไม่ระบุรางวัล)</div>
+      <div id="prizes" class="plist"></div>
+      <button class="small" id="btnAddPrize">+ เพิ่มรางวัล</button>
+      <label style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="edRemove" style="width:18px;height:18px"> คนที่ได้รางวัลแล้ว ไม่ต้องลุ้นซ้ำในรอบเดียวกัน</label>
+      <div class="lbl2">• ถ้าผู้มีสิทธิ์เกิน 80 คน จอจะแสดงแบบ “ชื่อวิ่ง” แทนวงล้อ (อ่านชื่อได้ชัดกว่า)<br>• การสุ่มทำบนเซิร์ฟเวอร์และบันทึกทุกครั้ง ตรวจสอบย้อนหลังได้</div>
+    </div>
+  </div>
+</div>
+
+<dialog id="dlgGame">
+  <h3 style="margin-top:0">ดึงรายชื่อจากผลเกม Quiz</h3>
+  <div class="fld"><label>เลือกเกม</label><select class="inp" id="gmSel"></select></div>
+  <div class="row" style="margin-top:10px">
+    <div class="fld"><label>เฉพาะคนที่ตอบถูกอย่างน้อย (ข้อ)</label><input class="inp" type="number" id="gmMin" value="0" min="0" style="width:140px"></div>
+    <div class="fld"><label>หรือเฉพาะอันดับ 1 ถึง (เว้นว่าง = ทุกคน)</label><input class="inp" type="number" id="gmTop" min="1" style="width:140px"></div>
+  </div>
+  <p class="lbl2" id="gmInfo"></p>
+  <div class="row" style="justify-content:flex-end"><button id="gmCancel">ยกเลิก</button><button class="primary" id="gmOk">เพิ่มรายชื่อ</button></div>
+</dialog>
+
+<!-- หน้าจับรางวัล (ฉายจอ) -->
+<div id="vStage" class="stage hidden">
+  <div class="sbar"><span class="brand">Quiz<b>Live</b></span><span id="stTitle"></span>
+    <span class="sp"></span><span id="stInfo"></span>
+    <button class="ghost small" id="stReg">QR ลงชื่อ</button>
+    <button class="ghost small" id="stNewRound">เริ่มรอบใหม่</button>
+    <button class="ghost small" id="stHist">⬇ ประวัติ (CSV)</button>
+    <button class="ghost small" id="stFull">⛶ เต็มจอ</button>
+    <button class="ghost small" id="stBack">← ตั้งค่า</button></div>
+  <div class="smain">
+    <div class="wheelwrap" id="wheelArea"></div>
+    <div class="side">
+      <div class="card" id="regPanel" style="display:none"></div>
+      <div class="card"><h4>🎁 เลือกรางวัลที่จะจับ</h4><div class="plist" id="stPrizes"></div></div>
+      <button class="spinbtn" id="spinBtn">🎡 หมุน! <small style="font-size:.5em;opacity:.7">(Space)</small></button>
+      <div class="card"><h4>🏆 ผู้โชคดี (รอบนี้)</h4><div class="wl" id="winners"></div></div>
+    </div>
+  </div>
+</div>
+<div class="overlay hidden" id="winBox"></div>
+<canvas class="confetti hidden" id="confetti"></canvas>
+
+<script src="nav.js"></script>
+<script>
+let W = null, prizeSel = null, spinning = false, rot = 0, pollT = null, regCode = null;
+const COLORS = ['#e21b3c', '#1368ce', '#d89e00', '#26890c', '#864cbf', '#0aa3a3', '#e8612c', '#46178f'];
+const view = id => ['vList', 'vEdit', 'vStage'].forEach(v => $('#' + v).classList.toggle('hidden', v !== id)) || $('#nav').classList.toggle('hidden', id === 'vStage');
+
+/* ---------- รายการ ---------- */
+async function renderList() {
+  view('vList'); stopPoll();
+  const { wheels } = await api('GET', '/api/wheels');
+  const sup = ME.role === 'super';
+  $('#list').innerHTML = wheels.length ? wheels.map(w => `<div class="card wc">
+      <h3>${esc(w.title)}</h3>
+      <div class="meta">${fmt(w.entryCount)} รายชื่อ • ${w.prizes.length ? w.prizes.map(p => `${esc(p.name)} ×${p.count}`).join(', ') : 'ไม่ระบุรางวัล'}</div>
+      <div class="meta" style="font-size:.85em">แก้ไขล่าสุด ${dt(w.updated)}</div>
+      ${sup ? `<div><span class="owner">${w.mine ? 'ของฉัน' : 'โดย ' + esc(w.ownerName)}</span></div>` : ''}
+      <div class="row"><button class="go" data-a="go" data-id="${w.id}">▶ จับรางวัล</button><button data-a="edit" data-id="${w.id}">ตั้งค่า</button>
+        <button class="small" data-a="dup" data-id="${w.id}">ทำสำเนา</button><button class="small danger" data-a="del" data-id="${w.id}">ลบ</button></div></div>`).join('')
+    : '<div class="empty">ยังไม่มีวงล้อ — กด “สร้างวงล้อใหม่” แล้ววางรายชื่อ หรือเปิดให้สแกน QR ลงชื่อ</div>';
+}
+$('#list').onclick = async e => {
+  const b = e.target.closest('button[data-a]'); if (!b) return;
+  const id = b.dataset.id;
+  try {
+    if (b.dataset.a === 'edit') openEdit(id);
+    if (b.dataset.a === 'go') { await load(id); openStage(); }
+    if (b.dataset.a === 'dup') { const w = await api('GET', '/api/wheels/' + id); await api('POST', '/api/wheels', { title: w.title + ' (สำเนา)', entries: w.entries, prizes: w.prizes.map(p => ({ name: p.name, count: p.count })), removeWinners: w.removeWinners }); renderList(); }
+    if (b.dataset.a === 'del' && confirm('ลบวงล้อนี้และประวัติการจับรางวัลทั้งหมด? (กู้คืนไม่ได้)')) { await api('DELETE', '/api/wheels/' + id); renderList(); }
+  } catch (ex) { alert(ex.message); }
+};
+$('#btnNew').onclick = async () => {
+  try { const r = await api('POST', '/api/wheels', { title: 'วงล้อสุ่มโชค', entries: [], prizes: [], removeWinners: true }); openEdit(r.id); } catch (e) { alert(e.message); }
+};
+
+/* ---------- ตั้งค่า ---------- */
+async function load(id) { W = await api('GET', '/api/wheels/' + id); regCode = W.regCode; return W; }
+const lines = () => $('#entries').value.split(/\r?\n/).map(s => s.split('\t')[0].trim()).filter(Boolean);
+function updCount() { const n = new Set(lines().map(x => x.toLowerCase())).size; $('#edCount').textContent = `(${fmt(n)} คน)`; }
+async function openEdit(id) {
+  try { await load(id); } catch (e) { return alert(e.message); }
+  view('vEdit'); window.scrollTo(0, 0);
+  $('#edTitle').value = W.title; $('#entries').value = W.entries.join('\n'); updCount();
+  $('#edRemove').checked = W.removeWinners !== false;
+  renderPrizes(W.prizes.map(p => ({ name: p.name, count: p.count })));
+  renderReg();
+  if (regCode) startPoll();
+}
+$('#entries').oninput = updCount;
+function renderPrizes(list) {
+  $('#prizes').innerHTML = list.map((p, i) => `<div class="prz"><input class="inp" data-i="${i}" data-f="name" value="${esc(p.name)}" placeholder="เช่น รางวัลที่ 1 / ทองคำ 1 สลึง">
+    <input class="inp" type="number" min="1" data-i="${i}" data-f="count" value="${p.count}" title="จำนวน"><button class="small" data-rm="${i}">✕</button></div>`).join('') || '<div class="lbl2">ยังไม่มีรางวัล</div>';
+}
+const readPrizes = () => [...$('#prizes').querySelectorAll('.prz')].map(r => ({ name: r.querySelector('[data-f=name]').value.trim(), count: +r.querySelector('[data-f=count]').value || 1 }));
+$('#btnAddPrize').onclick = () => renderPrizes([...readPrizes(), { name: '', count: 1 }]);
+$('#prizes').onclick = e => { const b = e.target.closest('[data-rm]'); if (b) { const l = readPrizes(); l.splice(+b.dataset.rm, 1); renderPrizes(l); } };
+$('#btnSort').onclick = () => { $('#entries').value = lines().sort((a, b) => a.localeCompare(b, 'th')).join('\n'); };
+$('#btnShuffle').onclick = () => { const l = lines(); for (let i = l.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [l[i], l[j]] = [l[j], l[i]]; } $('#entries').value = l.join('\n'); };
+$('#btnClear').onclick = () => { if (confirm('ล้างรายชื่อทั้งหมด?')) { $('#entries').value = ''; updCount(); } };
+async function save(silent) {
+  const body = { title: $('#edTitle').value.trim() || 'วงล้อสุ่มโชค', prizes: readPrizes().filter(p => p.name), removeWinners: $('#edRemove').checked };
+  if (!regCode) body.entries = lines(); // ระหว่างเปิดลงชื่อ รายชื่อถูกเพิ่มโดยระบบ (ไม่เขียนทับ)
+  await api('PUT', '/api/wheels/' + W.id, body);
+  await load(W.id);
+  if (!silent) { $('#edSave').textContent = 'บันทึกแล้ว ✓'; setTimeout(() => $('#edSave').textContent = 'บันทึก', 1500); }
+}
+$('#edSave').onclick = () => save().catch(e => alert(e.message));
+$('#edGo').onclick = async () => { try { await save(true); if (!W.entries.length) return alert('ยังไม่มีรายชื่อผู้ลุ้น'); openStage(); } catch (e) { alert(e.message); } };
+$('#edBack').onclick = async () => { try { await save(true); } catch {} renderList(); };
+
+// ลงชื่อผ่าน QR
+const joinUrl = () => `${location.origin}/lucky.html?c=${regCode}`;
+function renderReg() {
+  $('#entries').readOnly = !!regCode;
+  $('#entries').style.background = regCode ? '#f4f4f8' : '';
+  $('#regArea').innerHTML = regCode
+    ? `<div class="regbox"><img src="/qr?text=${encodeURIComponent(joinUrl())}" alt="QR"><div style="flex:1"><div class="lbl2">รหัสลงชื่อ</div><div class="code">${regCode}</div>
+        <div class="lbl2">${esc(joinUrl().replace(/^https?:\/\//, ''))}</div><div class="lbl2">ระหว่างเปิดรับ รายชื่อจะเพิ่มอัตโนมัติ (แก้ไขรายชื่อเองได้หลังปิดรับ)</div>
+        <button class="small danger" id="regOff" style="margin-top:8px">ปิดรับลงชื่อ</button></div></div>`
+    : `<button class="small go" id="regOn">📱 เปิดให้สแกน QR ลงชื่อ</button>`;
+  const on = $('#regOn'), off = $('#regOff');
+  if (on) on.onclick = async () => { try { await save(true); const r = await api('POST', `/api/wheels/${W.id}/registration`, { open: true }); regCode = r.code; renderReg(); startPoll(); } catch (e) { alert(e.message); } };
+  if (off) off.onclick = async () => { const r = await api('POST', `/api/wheels/${W.id}/registration`, { open: false }); regCode = null; stopPoll(); await load(W.id); $('#entries').value = W.entries.join('\n'); updCount(); renderReg(); };
+}
+function startPoll() {
+  stopPoll();
+  pollT = setInterval(async () => {
+    if (spinning || !W) return;
+    try {
+      await load(W.id);
+      if (!$('#vEdit').classList.contains('hidden')) { $('#entries').value = W.entries.join('\n'); updCount(); }
+      if (!$('#vStage').classList.contains('hidden')) renderStage(false);
+    } catch {}
+  }, 3000);
+}
+function stopPoll() { clearInterval(pollT); pollT = null; }
+
+// ดึงจากเกม
+let gmCache = {};
+$('#btnFromGame').onclick = async () => {
+  if (regCode) return alert('กรุณาปิดรับลงชื่อก่อน');
+  const { games } = await api('GET', '/api/games');
+  if (!games.length) return alert('ยังไม่มีประวัติเกม');
+  $('#gmSel').innerHTML = games.map(g => `<option value="${g.id}">${dt(g.playedAt)} — ${esc(g.title)} (${g.players} คน)</option>`).join('');
+  $('#gmInfo').textContent = ''; $('#dlgGame').showModal();
+};
+$('#gmCancel').onclick = () => $('#dlgGame').close();
+$('#gmOk').onclick = async () => {
+  const id = $('#gmSel').value;
+  const g = gmCache[id] || (gmCache[id] = await api('GET', '/api/games/' + id));
+  const min = +$('#gmMin').value || 0, top = +$('#gmTop').value || 0;
+  const names = g.report.players.filter(p => p.correct >= min && (!top || p.rank <= top)).map(p => p.name);
+  const have = new Set(lines().map(x => x.toLowerCase()));
+  const add = names.filter(n => !have.has(n.toLowerCase()));
+  $('#entries').value = [...lines(), ...add].join('\n'); updCount();
+  $('#dlgGame').close();
+  alert(`เพิ่ม ${add.length} รายชื่อ (ซ้ำ ${names.length - add.length})`);
+};
+
+/* ---------- หน้าจับรางวัล ---------- */
+function openStage() {
+  view('vStage'); $('#stTitle').textContent = W.title;
+  prizeSel = (W.prizes.find(p => p.drawn < p.count) || {}).name || null;
+  renderStage(true);
+  if (regCode) startPoll();
+}
+function renderStage(full) {
+  $('#stInfo').textContent = `รอบที่ ${W.round} • ผู้มีสิทธิ์ ${fmt(W.pool.length)} คน`;
+  // รางวัล
+  $('#stPrizes').innerHTML = W.prizes.length ? W.prizes.map(p => `<button class="pbtn ${p.name === prizeSel ? 'on' : ''}" data-p="${esc(p.name)}" ${p.drawn >= p.count ? 'disabled' : ''}>
+      <span>${esc(p.name)}</span><span>${p.drawn}/${p.count}</span></button>`).join('') : '<div class="lbl2">ไม่ได้ตั้งรางวัล — หมุนได้เรื่อย ๆ</div>';
+  // ผู้โชคดี
+  $('#winners').innerHTML = W.draws.length ? [...W.draws].reverse().map(d => `<div class="wi ${d.status === 'void' ? 'void' : ''}"><div class="tx"><div class="n">${esc(d.winner)}</div>
+      <div class="p">${d.prize !== '-' ? esc(d.prize) : ''}${d.status === 'void' ? ' • สละสิทธิ์' : ''}</div></div>
+      ${d.status === 'ok' ? `<button class="small" data-void="${d.id}" title="ไม่อยู่ในงาน → สละสิทธิ์ แล้วจับใหม่">สละสิทธิ์</button>` : ''}</div>`).join('') : '<div class="lbl2">ยังไม่มี</div>';
+  // QR ระหว่างจับ
+  const rp = $('#regPanel');
+  rp.style.display = regCode ? '' : 'none';
+  if (regCode) rp.innerHTML = `<div class="regmini"><img src="/qr?text=${encodeURIComponent(joinUrl())}"><div><b>สแกนเพื่อลงชื่อลุ้นรางวัล</b><div class="lbl2">รหัส <b style="font-size:1.4em;color:var(--bg2)">${regCode}</b></div><div class="lbl2">ลงชื่อแล้ว ${fmt(W.entries.length)} คน</div></div></div>`;
+  $('#stReg').textContent = regCode ? 'ปิดรับลงชื่อ' : 'QR ลงชื่อ';
+  const all = W.prizes.length && W.prizes.every(p => p.drawn >= p.count);
+  $('#spinBtn').disabled = spinning || !W.pool.length || all;
+  $('#spinBtn').innerHTML = all ? '🎉 จับครบทุกรางวัลแล้ว' : !W.pool.length ? 'ไม่มีรายชื่อเหลือ' : '🎡 หมุน! <small style="font-size:.5em;opacity:.7">(Space)</small>';
+  if (full || !spinning) drawArea(W.pool);
+}
+$('#stPrizes').onclick = e => { const b = e.target.closest('[data-p]'); if (b && !spinning) { prizeSel = b.dataset.p; renderStage(false); } };
+$('#winners').onclick = async e => {
+  const b = e.target.closest('[data-void]'); if (!b || spinning) return;
+  if (!confirm('ให้ผู้โชคดีคนนี้สละสิทธิ์ (เช่น ไม่อยู่ในงาน)? รางวัลนี้จะกลับมาให้จับใหม่')) return;
+  await api('POST', `/api/wheels/${W.id}/draws/${b.dataset.void}/void`, {}); await load(W.id);
+  const d = W.draws.find(x => String(x.id) === b.dataset.void); if (d && d.prize !== '-') prizeSel = d.prize;
+  renderStage(true);
+};
+$('#stBack').onclick = () => { if (!spinning) openEdit(W.id); };
+$('#stFull').onclick = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.();
+$('#stReg').onclick = async () => {
+  const r = await api('POST', `/api/wheels/${W.id}/registration`, { open: !regCode });
+  regCode = r.code; regCode ? startPoll() : stopPoll(); await load(W.id); regCode = W.regCode; renderStage(true);
+};
+$('#stNewRound').onclick = async () => {
+  if (spinning || !confirm('เริ่มรอบใหม่? ทุกคนจะกลับมามีสิทธิ์ลุ้น และนับรางวัลใหม่ (ประวัติรอบเก่ายังเก็บไว้)')) return;
+  await api('POST', `/api/wheels/${W.id}/new-round`, {}); await load(W.id); prizeSel = (W.prizes[0] || {}).name || null; renderStage(true);
+};
+$('#stHist').onclick = async () => {
+  const h = await api('GET', `/api/wheels/${W.id}/history`);
+  const rows = [[`กิจกรรม: ${h.title}`, `ดาวน์โหลดเมื่อ: ${new Date().toLocaleString('th-TH')}`], [], ['รอบ', 'เวลา', 'รางวัล', 'ผู้โชคดี', 'สถานะ', 'จำนวนผู้มีสิทธิ์ขณะสุ่ม', 'ผู้กดหมุน'],
+    ...h.draws.map(d => [d.round, new Date(d.drawnAt).toLocaleString('th-TH'), d.prize, d.winner, d.status === 'ok' ? 'ได้รับรางวัล' : 'สละสิทธิ์', d.poolSize, d.drawnBy])];
+  download(`ผลจับรางวัล_${h.title}_${new Date().toISOString().slice(0, 10)}.csv`, toCsv(rows), 'text/csv;charset=utf-8');
+};
+
+/* ---------- วาดวงล้อ / ชื่อวิ่ง ---------- */
+const WHEEL_MAX = 80;
+let canvas = null;
+function drawArea(pool) {
+  const a = $('#wheelArea');
+  if (pool.length > WHEEL_MAX || !pool.length) {
+    if (!a.querySelector('.slot')) a.innerHTML = `<div class="slot"><div class="nm" id="slotName"></div><div class="sub" id="slotSub"></div></div>`;
+    $('#slotName').textContent = pool.length ? '???' : '—';
+    $('#slotSub').textContent = pool.length ? `ลุ้นจาก ${fmt(pool.length)} รายชื่อ` : 'ไม่มีรายชื่อ';
+    canvas = null; return;
+  }
+  if (!a.querySelector('canvas')) a.innerHTML = `<div class="pointer"></div><canvas id="wheel" width="1000" height="1000"></canvas><div class="hub" id="hub">หมุน</div>`;
+  canvas = $('#wheel'); $('#hub').onclick = spin;
+  paint(pool, rot);
+}
+function paint(pool, r) {
+  const ctx = canvas.getContext('2d'), n = pool.length, R = 500, seg = 2 * Math.PI / n;
+  ctx.clearRect(0, 0, 1000, 1000);
+  ctx.save(); ctx.translate(R, R); ctx.rotate(r);
+  for (let i = 0; i < n; i++) {
+    const a0 = -Math.PI / 2 + i * seg - seg / 2; // ช่องที่ i อยู่กึ่งกลางที่มุม -90° + i*seg
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, R - 4, a0, a0 + seg); ctx.closePath();
+    ctx.fillStyle = COLORS[(i + (n % COLORS.length === 1 && i === n - 1 ? 1 : 0)) % COLORS.length]; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.save(); ctx.rotate(a0 + seg / 2); ctx.translate(R - 24, 0);
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    const fs = Math.max(13, Math.min(40, seg * R * 0.55));
+    ctx.font = `600 ${fs}px Kanit, sans-serif`;
+    let t = pool[i]; const maxW = R - 140;
+    while (ctx.measureText(t).width > maxW && t.length > 2) t = t.slice(0, -2);
+    if (t !== pool[i]) t += '…';
+    ctx.fillText(t, 0, 0); ctx.restore();
+  }
+  ctx.restore();
+}
+
+/* ---------- เสียง ---------- */
+let ac = null;
+function beep(f = 900, d = 0.03, v = 0.08, type = 'square') {
+  try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); const o = ac.createOscillator(), g = ac.createGain(); o.type = type; o.frequency.value = f; g.gain.value = v; o.connect(g); g.connect(ac.destination); o.start(); g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + d); o.stop(ac.currentTime + d); } catch {}
+}
+const fanfare = () => [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => beep(f, 0.25, 0.12, 'triangle'), i * 140));
+
+/* ---------- หมุน ---------- */
+async function spin() {
+  if (spinning || $('#spinBtn').disabled) return;
+  if (W.prizes.length && !prizeSel) return alert('กรุณาเลือกรางวัล');
+  spinning = true; $('#spinBtn').disabled = true;
+  let r;
+  try { r = await api('POST', `/api/wheels/${W.id}/draw`, { prize: prizeSel || '' }); }
+  catch (e) { spinning = false; renderStage(false); return alert(e.message); }
+  const pool = r.pool, n = pool.length, ms = 6000;
+  drawArea(pool);
+  if (canvas) {
+    const seg = 2 * Math.PI / n;
+    const jitter = (Math.random() - 0.5) * seg * 0.6;
+    const target = -r.index * seg + jitter; // ให้ช่องผู้ชนะมาอยู่ใต้เข็มด้านบน
+    const base = rot - (rot % (2 * Math.PI));
+    const end = base + 2 * Math.PI * 8 + ((target % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+    const start = rot, t0 = performance.now();
+    let lastSeg = Math.floor((start + seg / 2) / seg);
+    await new Promise(res => {
+      (function f(t) {
+        const k = Math.min(1, (t - t0) / ms), e = 1 - Math.pow(1 - k, 4);
+        rot = start + (end - start) * e; paint(pool, rot);
+        const s = Math.floor((rot + seg / 2) / seg); if (s !== lastSeg) { lastSeg = s; beep(1100, 0.02, 0.05); }
+        k < 1 ? requestAnimationFrame(f) : res();
+      })(t0);
+    });
+  } else {
+    const t0 = performance.now(); let last = 0;
+    await new Promise(res => {
+      (function f(t) {
+        const k = Math.min(1, (t - t0) / ms), gap = 40 + 420 * k * k * k;
+        if (t - last > gap) { last = t; $('#slotName').textContent = pool[Math.floor(Math.random() * n)]; beep(1100, 0.02, 0.05); }
+        k < 1 ? requestAnimationFrame(f) : res();
+      })(t0);
+    });
+    $('#slotName').textContent = r.winner;
+  }
+  fanfare(); confetti();
+  showWinner(r);
+}
+function showWinner(r) {
+  const box = $('#winBox');
+  box.innerHTML = `<div class="win"><div class="pz">${r.prize !== '-' ? '🎁 ' + esc(r.prize) : '🎉 ผู้โชคดี'}</div><div class="nm">${esc(r.winner)}</div>
+    <div class="row" style="justify-content:center"><button class="go" id="wOk" style="font-size:1.2em">ยืนยัน 🎉</button>
+    <button id="wVoid">ไม่อยู่ในงาน (สละสิทธิ์)</button></div></div>`;
+  box.classList.remove('hidden');
+  const done = async voided => {
+    if (voided) await api('POST', `/api/wheels/${W.id}/draws/${r.drawId}/void`, {}).catch(e => alert(e.message));
+    box.classList.add('hidden'); spinning = false;
+    await load(W.id);
+    if (!voided) { const p = W.prizes.find(x => x.name === prizeSel); if (p && p.drawn >= p.count) prizeSel = (W.prizes.find(x => x.drawn < x.count) || {}).name || null; }
+    renderStage(true);
+  };
+  $('#wOk').onclick = () => done(false);
+  $('#wVoid').onclick = () => confirm('ยืนยันสละสิทธิ์? รางวัลนี้จะให้จับใหม่') && done(true);
+}
+$('#spinBtn').onclick = spin;
+document.addEventListener('keydown', e => {
+  if ($('#vStage').classList.contains('hidden') || e.target.matches('input,textarea')) return;
+  if (e.key === ' ') { e.preventDefault(); if (!$('#winBox').classList.contains('hidden')) $('#wOk')?.click(); else spin(); }
+});
+
+function confetti() {
+  const c = $('#confetti'), ctx = c.getContext('2d');
+  c.classList.remove('hidden'); c.width = innerWidth; c.height = innerHeight;
+  const cols = ['#e21b3c', '#1368ce', '#d89e00', '#26890c', '#ffcc00', '#fff'];
+  const ps = Array.from({ length: 220 }, () => ({ x: Math.random() * c.width, y: -20 - Math.random() * c.height, w: 6 + Math.random() * 8, h: 8 + Math.random() * 10, vy: 2 + Math.random() * 4, vx: -1.5 + Math.random() * 3, r: Math.random() * 6, vr: -.2 + Math.random() * .4, c: cols[Math.floor(Math.random() * cols.length)] }));
+  let t = 0;
+  (function f() {
+    ctx.clearRect(0, 0, c.width, c.height);
+    ps.forEach(p => { p.x += p.vx; p.y += p.vy; p.r += p.vr; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.fillStyle = p.c; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); ctx.restore(); });
+    if (++t < 300) requestAnimationFrame(f); else { c.classList.add('hidden'); ctx.clearRect(0, 0, c.width, c.height); }
+  })();
+}
+
+bootNav('wheel').then(renderList).catch(e => { if (!/เข้าสู่ระบบ/.test(e.message)) alert(e.message); });
+</script>
+</body>
+</html>

@@ -24,6 +24,10 @@ async function init() {
     id SERIAL PRIMARY KEY, username TEXT UNIQUE NOT NULL, display_name TEXT NOT NULL,
     password_hash TEXT NOT NULL, role TEXT NOT NULL, active BOOLEAN NOT NULL DEFAULT true,
     must_change BOOLEAN NOT NULL DEFAULT true, created_at BIGINT NOT NULL, last_login BIGINT)`);
+  // คอลัมน์ใหม่ (v3): วันหมดอายุบัญชี + รหัสกู้คืน — เพิ่มให้ฐานข้อมูลเดิมอัตโนมัติ
+  for (const col of ['expires_at BIGINT', 'recovery_hash TEXT']) {
+    try { await q(`ALTER TABLE users ADD COLUMN ${col}`); } catch (e) { if (!/exist/i.test(e.message)) throw e; }
+  }
   await q(`CREATE TABLE IF NOT EXISTS sessions (
     token TEXT PRIMARY KEY, user_id INTEGER NOT NULL, expires_at BIGINT NOT NULL)`);
   await q(`CREATE TABLE IF NOT EXISTS quizzes (
@@ -32,6 +36,18 @@ async function init() {
   await q(`CREATE TABLE IF NOT EXISTS games (
     id SERIAL PRIMARY KEY, owner_id INTEGER NOT NULL, quiz_title TEXT NOT NULL, pin TEXT NOT NULL,
     player_count INTEGER NOT NULL, question_count INTEGER NOT NULL, played_at BIGINT NOT NULL, report TEXT NOT NULL)`);
+  await q(`CREATE TABLE IF NOT EXISTS wheels (
+    id SERIAL PRIMARY KEY, owner_id INTEGER NOT NULL, title TEXT NOT NULL, data TEXT NOT NULL,
+    created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL)`);
+  await q(`CREATE TABLE IF NOT EXISTS draws (
+    id SERIAL PRIMARY KEY, wheel_id INTEGER NOT NULL, owner_id INTEGER NOT NULL, round INTEGER NOT NULL,
+    prize TEXT NOT NULL, winner TEXT NOT NULL, pool_size INTEGER NOT NULL, status TEXT NOT NULL,
+    drawn_by INTEGER NOT NULL, drawn_at BIGINT NOT NULL)`);
+  await q(`CREATE TABLE IF NOT EXISTS forms (
+    id SERIAL PRIMARY KEY, owner_id INTEGER NOT NULL, title TEXT NOT NULL, data TEXT NOT NULL,
+    code TEXT NOT NULL, is_open BOOLEAN NOT NULL DEFAULT false, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL)`);
+  await q(`CREATE TABLE IF NOT EXISTS responses (
+    id SERIAL PRIMARY KEY, form_id INTEGER NOT NULL, name TEXT NOT NULL, answers TEXT NOT NULL, submitted_at BIGINT NOT NULL)`);
   await bootstrapSuper();
 }
 
@@ -57,7 +73,7 @@ function verifyPassword(pw, stored) {
 /* ---------- Super Admin เริ่มต้น ---------- */
 async function bootstrapSuper() {
   const uname = (process.env.SUPER_ADMIN_USERNAME || 'admin').trim().toLowerCase();
-  const pw = process.env.SUPER_ADMIN_PASSWORD || '';
+  const pw = (process.env.SUPER_ADMIN_PASSWORD || '').trim();
   const supers = await q(`SELECT id, username FROM users WHERE role = 'super'`);
   if (!supers.length) {
     if (!pw) {
@@ -69,7 +85,7 @@ async function bootstrapSuper() {
     if (existing.length) await q(`UPDATE users SET role = 'super', password_hash = $1, active = true WHERE id = $2`, [h, existing[0].id]);
     else await q(`INSERT INTO users (username, display_name, password_hash, role, active, must_change, created_at) VALUES ($1, $2, $3, 'super', true, false, $4)`, [uname, 'Super Admin', h, Date.now()]);
     console.log(`✅ สร้างบัญชี Super Admin "${uname}" แล้ว`);
-  } else if (process.env.RESET_SUPER_PASSWORD === '1' && pw) {
+  } else if (String(process.env.RESET_SUPER_PASSWORD || '').trim() === '1' && pw) {
     // ใช้เมื่อลืมรหัส Super Admin: ตั้ง RESET_SUPER_PASSWORD=1 ชั่วคราว แล้วลบออกหลังเข้าได้
     const h = await hashPassword(pw);
     await q(`UPDATE users SET password_hash = $1, active = true WHERE id = $2`, [h, supers[0].id]);
@@ -88,12 +104,28 @@ async function userFromToken(token) {
   if (!token || !/^[a-f0-9]{64}$/.test(token)) return null;
   const s = await q(`SELECT user_id, expires_at FROM sessions WHERE token = $1`, [token]);
   if (!s.length || Number(s[0].expires_at) < Date.now()) return null;
-  const u = await q(`SELECT id, username, display_name, role, active, must_change FROM users WHERE id = $1`, [s[0].user_id]);
-  if (!u.length || !u[0].active) return null;
+  const u = await q(`SELECT id, username, display_name, role, active, must_change, expires_at, recovery_hash FROM users WHERE id = $1`, [s[0].user_id]);
+  if (!u.length || !u[0].active || isExpired(u[0])) return null;
   return u[0];
 }
+const isExpired = u => u.expires_at !== null && u.expires_at !== undefined && Number(u.expires_at) < Date.now();
+
+/* ---------- รหัสกู้คืน (ใช้รีเซ็ตรหัสผ่านเองเมื่อลืม) ---------- */
+const RC_ABC = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const normCode = c => String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+function newRecoveryCode() {
+  let s = ''; for (let i = 0; i < 12; i++) s += RC_ABC[crypto.randomInt(RC_ABC.length)];
+  return s.match(/.{4}/g).join('-');
+}
+async function setRecoveryCode(userId) {
+  const code = newRecoveryCode();
+  await q(`UPDATE users SET recovery_hash = $1 WHERE id = $2`, [await hashPassword(normCode(code)), userId]);
+  return code;
+}
+const verifyRecovery = (code, hash) => hash ? verifyPassword(normCode(code), hash) : Promise.resolve(false);
+
 const deleteSession = token => q(`DELETE FROM sessions WHERE token = $1`, [token]);
 const deleteUserSessions = (userId, exceptToken = '') => q(`DELETE FROM sessions WHERE user_id = $1 AND token <> $2`, [userId, exceptToken]);
 const purgeSessions = () => q(`DELETE FROM sessions WHERE expires_at < $1`, [Date.now()]);
 
-module.exports = { q, init, hashPassword, verifyPassword, createSession, userFromToken, deleteSession, deleteUserSessions, purgeSessions, persistent: () => persistent };
+module.exports = { isExpired, setRecoveryCode, verifyRecovery, q, init, hashPassword, verifyPassword, createSession, userFromToken, deleteSession, deleteUserSessions, purgeSessions, persistent: () => persistent };

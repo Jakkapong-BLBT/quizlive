@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#46178f">
+<title>QuizLive — ลงชื่อลุ้นรางวัล</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  body{font-family:system-ui,-apple-system,'Segoe UI',Tahoma,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100dvh;padding:20px}
+  .box{width:min(420px,100%);text-align:center}
+  .box h1{font-size:2.4em;margin:0 0 4px}
+  .card{display:flex;flex-direction:column;gap:12px;text-align:left}
+  .card button{font-size:1.15em;padding:.8em}
+  .errbox{background:#ffe3e7;color:#b0102b;border-radius:8px;padding:10px;font-weight:600}
+  .done{font-size:4em}
+</style>
+</head>
+<body>
+<div class="box">
+  <h1 class="brand">Quiz<b>Live</b></h1>
+  <div id="title" style="opacity:.9;margin-bottom:18px;font-size:1.15em">🎡 ลงชื่อลุ้นรางวัล</div>
+  <div class="card" id="form">
+    <label class="lbl2" style="color:var(--muted)">ชื่อของคุณ (ให้ผู้จัดเห็นชัดว่าคือใคร)</label>
+    <input class="big" id="name" maxlength="60" placeholder="เช่น สมชาย ใจดี (KAT สาขาสยาม)" autocomplete="off">
+    <button class="primary" id="btn">ลงชื่อร่วมลุ้น</button>
+    <div class="errbox hidden" id="err"></div>
+  </div>
+  <div class="card hidden" id="ok" style="text-align:center"><div class="done">🎉</div><h2 style="margin:0" id="okMsg">ลงชื่อเรียบร้อย!</h2><p style="color:var(--muted)">รอลุ้นชื่อของคุณบนจอใหญ่ได้เลย</p></div>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+const code = new URLSearchParams(location.search).get('c') || '';
+const err = m => { $('#err').textContent = m; $('#err').classList.toggle('hidden', !m); };
+let mine = null; try { mine = localStorage.getItem('ql_lucky_' + code); } catch {}
+fetch('/api/public/wheel/' + encodeURIComponent(code)).then(r => r.json().then(d => ({ ok: r.ok, d }))).then(({ ok, d }) => {
+  if (!ok) { err(d.error); $('#btn').disabled = true; return; }
+  $('#title').textContent = '🎡 ' + d.title;
+  if (mine) done(mine, true);
+}).catch(() => err('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ลองใหม่อีกครั้ง'));
+function done(name, again) {
+  $('#form').classList.add('hidden'); $('#ok').classList.remove('hidden');
+  $('#okMsg').textContent = (again ? 'คุณลงชื่อแล้ว: ' : 'ลงชื่อเรียบร้อย: ') + name;
+}
+$('#btn').onclick = async () => {
+  const name = $('#name').value.trim(); err('');
+  if (!name) return err('กรุณาใส่ชื่อ');
+  $('#btn').disabled = true; $('#btn').textContent = 'กำลังส่ง…';
+  try {
+    const r = await fetch('/api/public/wheel/' + encodeURIComponent(code) + '/join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+    try { localStorage.setItem('ql_lucky_' + code, d.name); } catch {}
+    done(d.name, d.already);
+  } catch (e) { err(e.message === 'Failed to fetch' ? 'เชื่อมต่อไม่ได้ ลองกดอีกครั้ง' : e.message); }
+  $('#btn').disabled = false; $('#btn').textContent = 'ลงชื่อร่วมลุ้น';
+};
+$('#name').onkeydown = e => e.key === 'Enter' && $('#btn').click();
+</script>
+</body>
+</html>

@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#46178f">
+<title>แบบประเมิน</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  body{font-family:system-ui,-apple-system,'Segoe UI',Tahoma,sans-serif;padding:16px 14px 40px}
+  .box{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+  .hd{background:#fff;color:var(--ink);border-radius:14px;padding:20px;border-top:8px solid var(--accent)}
+  .hd h1{margin:0 0 6px;font-size:1.5em}
+  .hd p{margin:0;color:var(--muted);white-space:pre-wrap}
+  .q{background:#fff;color:var(--ink);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:12px;border:3px solid transparent}
+  .q.bad{border-color:var(--bad)}
+  .q .t{font-weight:600;font-size:1.08em}
+  .q .t .req{color:var(--bad)}
+  .rate{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+  .rate button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 2px;background:#f4f2fb;box-shadow:none;font-size:1.5em;color:var(--ink)}
+  .rate button small{font-size:.45em;color:var(--muted);font-weight:500;line-height:1.2}
+  .rate button.on{background:var(--bg2);color:#fff}.rate button.on small{color:#ddd}
+  .opt{display:flex;gap:10px;align-items:center;background:#f4f2fb;border-radius:10px;padding:12px 14px;cursor:pointer;font-size:1.02em}
+  .opt input{width:20px;height:20px;accent-color:var(--bg2);flex:none}
+  .opt.on{background:#e4ddf7}
+  textarea.inp{min-height:90px;font-family:inherit;font-size:1em}
+  .send{font-size:1.2em;padding:.85em;background:var(--accent);color:var(--ink)}
+  .msg{background:#fff;color:var(--ink);border-radius:14px;padding:30px 20px;text-align:center}
+  .msg big{font-size:3.6em;display:block}
+  .errbox{background:#ffe3e7;color:#b0102b;border-radius:10px;padding:12px;font-weight:600}
+</style>
+</head>
+<body>
+<div class="box" id="app"><div class="msg">กำลังโหลด…</div></div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const code = new URLSearchParams(location.search).get('c') || '';
+const RL = ['', 'น้อยที่สุด', 'น้อย', 'ปานกลาง', 'มาก', 'มากที่สุด'];
+const KEY = 'ql_form_done_' + code;
+let F = null, A = [];
+const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+
+function msg(icon, title, sub, btn) {
+  $('#app').innerHTML = `<div class="msg"><big>${icon}</big><h2 style="margin:8px 0">${esc(title)}</h2><p style="color:var(--muted)">${esc(sub || '')}</p>${btn ? `<button class="ghost" style="background:#f4f2fb;color:var(--ink)" id="again">${btn}</button>` : ''}</div>`;
+  const a = $('#again'); if (a) a.onclick = render;
+}
+fetch('/api/public/form/' + encodeURIComponent(code)).then(r => r.json().then(d => ({ ok: r.ok, d }))).then(({ ok, d }) => {
+  if (!ok) return msg('🔍', d.error || 'ไม่พบแบบประเมิน');
+  F = d; document.title = F.title;
+  if (!F.open) return msg('⏸', F.title, 'แบบประเมินนี้ยังไม่เปิด หรือปิดรับคำตอบแล้ว');
+  if (store.get(KEY)) return msg('✅', 'คุณส่งแบบประเมินนี้แล้ว', 'ขอบคุณสำหรับความคิดเห็น', 'ใช้เครื่องร่วมกับผู้อื่น? ตอบใหม่อีกครั้ง');
+  render();
+}).catch(() => msg('📶', 'เชื่อมต่อไม่ได้', 'กรุณาตรวจสอบอินเทอร์เน็ตแล้วรีเฟรชหน้า'));
+
+function render() {
+  A = F.questions.map(q => q.type === 'multi' ? [] : null);
+  $('#app').innerHTML = `<div class="hd"><h1>${esc(F.title)}</h1>${F.description ? `<p>${esc(F.description)}</p>` : ''}</div>
+    ${F.askName ? `<div class="q"><div class="t">ชื่อของคุณ ${F.nameRequired ? '<span class="req">*</span>' : '<span style="color:var(--muted);font-weight:400">(ไม่บังคับ)</span>'}</div><input class="inp" id="nm" maxlength="60" placeholder="ชื่อ-นามสกุล / สาขา"></div>` : ''}
+    ${F.questions.map((q, i) => `<div class="q" data-i="${i}"><div class="t">${i + 1}. ${esc(q.text)} ${q.required ? '<span class="req">*</span>' : ''}</div>${body(q, i)}</div>`).join('')}
+    <div class="errbox" id="err" style="display:none"></div>
+    <button class="send" id="send">ส่งแบบประเมิน</button>`;
+  $('#app').onclick = click; $('#app').oninput = input;
+  $('#send').onclick = send;
+}
+function body(q, i) {
+  if (q.type === 'rating') return `<div class="rate">${[1, 2, 3, 4, 5].map(n => `<button data-r="${n}">${n}<small>${RL[n]}</small></button>`).join('')}</div>`;
+  if (q.type === 'choice') return q.options.map((o, k) => `<label class="opt"><input type="radio" name="q${i}" value="${k}"> ${esc(o)}</label>`).join('');
+  if (q.type === 'multi') return q.options.map((o, k) => `<label class="opt"><input type="checkbox" value="${k}"> ${esc(o)}</label>`).join('') + '<div style="color:var(--muted);font-size:.85em">เลือกได้มากกว่า 1 ข้อ</div>';
+  return `<textarea class="inp" maxlength="2000" placeholder="พิมพ์คำตอบ…"></textarea>`;
+}
+function click(e) {
+  const b = e.target.closest('[data-r]'); if (!b) return;
+  const qd = b.closest('.q'), i = +qd.dataset.i;
+  A[i] = +b.dataset.r; qd.querySelectorAll('[data-r]').forEach(x => x.classList.toggle('on', x === b)); qd.classList.remove('bad');
+}
+function input(e) {
+  const qd = e.target.closest('.q[data-i]'); if (!qd) return;
+  const i = +qd.dataset.i, q = F.questions[i];
+  if (q.type === 'choice') { A[i] = +e.target.value; qd.querySelectorAll('.opt').forEach(o => o.classList.toggle('on', o.querySelector('input').checked)); }
+  if (q.type === 'multi') { A[i] = [...qd.querySelectorAll('input:checked')].map(x => +x.value); qd.querySelectorAll('.opt').forEach(o => o.classList.toggle('on', o.querySelector('input').checked)); }
+  if (q.type === 'text') A[i] = e.target.value;
+  qd.classList.remove('bad');
+}
+async function send() {
+  const err = m => { const el = $('#err'); el.textContent = m; el.style.display = m ? '' : 'none'; };
+  err('');
+  const name = $('#nm') ? $('#nm').value.trim() : '';
+  if (F.askName && F.nameRequired && !name) { $('#nm').focus(); return err('กรุณาใส่ชื่อ'); }
+  const miss = F.questions.findIndex((q, i) => q.required && (A[i] === null || (Array.isArray(A[i]) && !A[i].length) || (q.type === 'text' && !String(A[i] || '').trim())));
+  if (miss >= 0) { const qd = document.querySelector(`.q[data-i="${miss}"]`); qd.classList.add('bad'); qd.scrollIntoView({ behavior: 'smooth', block: 'center' }); return err(`กรุณาตอบข้อ ${miss + 1}`); }
+  $('#send').disabled = true; $('#send').textContent = 'กำลังส่ง…';
+  try {
+    const r = await fetch('/api/public/form/' + encodeURIComponent(code) + '/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, answers: A.map(a => Array.isArray(a) && !a.length ? null : a) }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+    store.set(KEY, '1');
+    msg('🙏', 'ส่งแบบประเมินเรียบร้อย', 'ขอบคุณสำหรับความคิดเห็นของคุณ');
+  } catch (e) {
+    err(e.message === 'Failed to fetch' ? 'ส่งไม่สำเร็จ (อินเทอร์เน็ต) — คำตอบยังอยู่ กดส่งอีกครั้งได้' : e.message);
+    $('#send').disabled = false; $('#send').textContent = 'ส่งแบบประเมิน';
+  }
+}
+</script>
+</body>
+</html>

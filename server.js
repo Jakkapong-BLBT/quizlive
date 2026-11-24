@@ -48,7 +48,16 @@ app.use('/api', (req, res, next) => {
   if (!['GET', 'HEAD'].includes(req.method) && !req.is('application/json')) return res.status(415).json({ error: 'รูปแบบคำขอไม่ถูกต้อง' });
   next();
 });
-const pub = u => ({ id: u.id, username: u.username, displayName: u.display_name, role: u.role, active: u.active, mustChange: u.must_change, lastLogin: u.last_login ? Number(u.last_login) : null, createdAt: u.created_at ? Number(u.created_at) : null });
+const pub = u => ({ id: u.id, username: u.username, displayName: u.display_name, role: u.role, active: u.active, mustChange: u.must_change, lastLogin: u.last_login ? Number(u.last_login) : null, createdAt: u.created_at ? Number(u.created_at) : null,
+  expiresAt: u.expires_at !== null && u.expires_at !== undefined ? Number(u.expires_at) : null, expired: db.isExpired(u), hasRecovery: !!u.recovery_hash });
+const thDate = t => new Date(t).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', dateStyle: 'long', timeStyle: 'short' });
+// วันหมดอายุ: null = ไม่จำกัด, ตัวเลข = เวลา (ms) ต้องอยู่ในอนาคต และไม่เกิน 5 ปี
+function parseExpiry(v) {
+  if (v === null || v === '' || v === undefined) return { ok: true, value: null };
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < Date.now() || n > Date.now() + 5 * 365 * 864e5) return { ok: false };
+  return { ok: true, value: Math.round(n) };
+}
 const validUsername = s => /^[a-z0-9._-]{3,30}$/.test(s);
 const validPassword = s => typeof s === 'string' && s.length >= 8 && s.length <= 100;
 
@@ -73,6 +82,7 @@ app.post('/api/login', wrap(async (req, res) => {
   const ok = u ? await db.verifyPassword(password, u.password_hash) : (await db.verifyPassword(password, 'scrypt$00$00'), false);
   if (!u || !ok) { addFail(key); return res.status(401).json({ error: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' }); }
   if (!u.active) return res.status(403).json({ error: 'บัญชีนี้ถูกระงับ กรุณาติดต่อผู้ดูแลระบบ' });
+  if (db.isExpired(u)) return res.status(403).json({ error: `บัญชีนี้หมดอายุเมื่อ ${thDate(Number(u.expires_at))} กรุณาติดต่อผู้ดูแลระบบเพื่อต่ออายุ` });
   fails.delete(key);
   await db.q(`UPDATE users SET last_login = $1 WHERE id = $2`, [Date.now(), u.id]);
   setSessionCookie(req, res, await db.createSession(u.id));
@@ -97,7 +107,33 @@ app.post('/api/change-password', needAuth(), wrap(async (req, res) => {
   if (nw === current) return res.status(400).json({ error: 'รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสเดิม' });
   await db.q(`UPDATE users SET password_hash = $1, must_change = false WHERE id = $2`, [await db.hashPassword(nw), u.id]);
   await db.deleteUserSessions(u.id, readCookie(req.headers.cookie, COOKIE));
-  res.json({ ok: true });
+  // ยังไม่มีรหัสกู้คืน → ออกให้ทันที (แสดงครั้งเดียว)
+  const recoveryCode = u.recovery_hash ? null : await db.setRecoveryCode(u.id);
+  res.json({ ok: true, recoveryCode });
+}));
+// สร้างรหัสกู้คืนใหม่ (ต้องยืนยันรหัสผ่านปัจจุบัน) — รหัสเก่าใช้ไม่ได้ทันที
+app.post('/api/recovery-code', needAuth(), wrap(async (req, res) => {
+  const row = (await db.q(`SELECT password_hash FROM users WHERE id = $1`, [req._user.id]))[0];
+  if (!(await db.verifyPassword(String(req.body.password || ''), row.password_hash))) return res.status(400).json({ error: 'รหัสผ่านไม่ถูกต้อง' });
+  res.json({ ok: true, recoveryCode: await db.setRecoveryCode(req._user.id) });
+}));
+// ลืมรหัสผ่าน: ชื่อผู้ใช้ + รหัสกู้คืน → ตั้งรหัสใหม่เอง (รหัสกู้คืนเดิมถูกใช้แล้ว ระบบออกรหัสใหม่ให้)
+app.post('/api/forgot-password', wrap(async (req, res) => {
+  const username = String(req.body.username || '').trim().toLowerCase();
+  const key = 'rc|' + username + '|' + req.ip;
+  const lock = lockedFor(key);
+  if (lock) return res.status(429).json({ error: `ลองผิดหลายครั้ง กรุณารอ ${lock} นาที` });
+  const nw = req.body.next;
+  if (!validPassword(nw)) return res.status(400).json({ error: 'รหัสผ่านใหม่ต้องยาวอย่างน้อย 8 ตัวอักษร' });
+  const u = (await db.q(`SELECT * FROM users WHERE username = $1`, [username]))[0];
+  const ok = u ? await db.verifyRecovery(req.body.code, u.recovery_hash) : (await db.verifyPassword('x', 'scrypt$00$00'), false);
+  if (!u || !ok) { addFail(key); return res.status(400).json({ error: 'ชื่อผู้ใช้หรือรหัสกู้คืนไม่ถูกต้อง' }); }
+  if (!u.active) return res.status(403).json({ error: 'บัญชีนี้ถูกระงับ กรุณาติดต่อผู้ดูแลระบบ' });
+  if (db.isExpired(u)) return res.status(403).json({ error: `บัญชีนี้หมดอายุแล้ว กรุณาติดต่อผู้ดูแลระบบเพื่อต่ออายุ` });
+  fails.delete(key);
+  await db.q(`UPDATE users SET password_hash = $1, must_change = false WHERE id = $2`, [await db.hashPassword(nw), u.id]);
+  await db.deleteUserSessions(u.id);
+  res.json({ ok: true, recoveryCode: await db.setRecoveryCode(u.id) });
 }));
 
 /* ---------- จัดการผู้ใช้ (Super Admin) ---------- */
@@ -113,12 +149,14 @@ app.post('/api/users', needAuth(true), wrap(async (req, res) => {
   const displayName = String(req.body.displayName || '').trim().slice(0, 60);
   const password = String(req.body.password || '');
   const role = req.body.role === 'super' ? 'super' : 'organizer';
+  const exp = parseExpiry(req.body.expiresAt);
+  if (!exp.ok) return res.status(400).json({ error: 'วันหมดอายุไม่ถูกต้อง (ต้องเป็นวันในอนาคต)' });
   if (!validUsername(username)) return res.status(400).json({ error: 'ชื่อผู้ใช้ต้องเป็น a-z, 0-9, จุด, ขีด ยาว 3–30 ตัว (ภาษาอังกฤษ)' });
   if (!displayName) return res.status(400).json({ error: 'กรุณาใส่ชื่อที่แสดง' });
   if (!validPassword(password)) return res.status(400).json({ error: 'รหัสผ่านชั่วคราวต้องยาวอย่างน้อย 8 ตัวอักษร' });
   if ((await db.q(`SELECT id FROM users WHERE username = $1`, [username])).length) return res.status(400).json({ error: 'ชื่อผู้ใช้นี้มีอยู่แล้ว' });
-  await db.q(`INSERT INTO users (username, display_name, password_hash, role, active, must_change, created_at) VALUES ($1, $2, $3, $4, true, true, $5)`,
-    [username, displayName, await db.hashPassword(password), role, Date.now()]);
+  await db.q(`INSERT INTO users (username, display_name, password_hash, role, active, must_change, created_at, expires_at) VALUES ($1, $2, $3, $4, true, true, $5, $6)`,
+    [username, displayName, await db.hashPassword(password), role, Date.now(), exp.value]);
   res.json({ ok: true });
 }));
 app.patch('/api/users/:id', needAuth(true), wrap(async (req, res) => {
@@ -133,6 +171,12 @@ app.patch('/api/users/:id', needAuth(true), wrap(async (req, res) => {
     await db.q(`UPDATE users SET display_name = $1 WHERE id = $2`, [dn, id]);
   }
   if (b.role !== undefined) await db.q(`UPDATE users SET role = $1 WHERE id = $2`, [b.role === 'super' ? 'super' : 'organizer', id]);
+  if (b.expiresAt !== undefined) {
+    if (id === me.id && b.expiresAt !== null) return res.status(400).json({ error: 'ไม่สามารถกำหนดวันหมดอายุให้บัญชีของตัวเองได้' });
+    const exp = parseExpiry(b.expiresAt);
+    if (!exp.ok) return res.status(400).json({ error: 'วันหมดอายุไม่ถูกต้อง (ต้องเป็นวันในอนาคต)' });
+    await db.q(`UPDATE users SET expires_at = $1 WHERE id = $2`, [exp.value, id]);
+  }
   if (b.active !== undefined) {
     await db.q(`UPDATE users SET active = $1 WHERE id = $2`, [!!b.active, id]);
     if (!b.active) await db.deleteUserSessions(id);
@@ -218,12 +262,17 @@ app.delete('/api/games/:id', needAuth(), wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
+/* ---------- วงล้อสุ่มโชค + แบบประเมิน ---------- */
+require('./features')(app, db, needAuth, wrap);
+
 /* ---------- หน้าเว็บ: หน้าผู้จัดต้องล็อกอินก่อน ---------- */
 const noCache = res => res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-app.get(['/host', '/host.html'], wrap(async (req, res) => {
-  if (!(await currentUser(req))) return res.redirect('/login.html');
-  noCache(res); res.sendFile(path.join(__dirname, 'public', 'host.html'));
-}));
+for (const page of ['host', 'wheel', 'forms']) {
+  app.get(['/' + page, '/' + page + '.html'], wrap(async (req, res) => {
+    if (!(await currentUser(req))) return res.redirect('/login.html');
+    noCache(res); res.sendFile(path.join(__dirname, 'public', page + '.html'));
+  }));
+}
 app.get(['/login', '/admin'], (req, res) => res.redirect('/login.html'));
 app.use(express.static(path.join(__dirname, 'public'), { setHeaders: noCache }));
 app.get('/qr', async (req, res) => {

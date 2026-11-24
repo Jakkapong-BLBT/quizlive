@@ -96,7 +96,7 @@
   /* nav */
   .nav{display:flex;align-items:center;gap:6px;padding:10px 22px;background:rgba(0,0,0,.25);flex-wrap:wrap}
   .nav .brand{font-size:1.5em;margin-right:14px}
-  .nav .tab{background:transparent;color:#fff;box-shadow:none;opacity:.75;padding:.5em .9em}
+  .nav .tab{background:transparent;color:#fff;box-shadow:none;opacity:.75;padding:.5em .9em;border-radius:10px;text-decoration:none;font-weight:600}
   .nav .tab.on{background:rgba(255,255,255,.16);opacity:1}
   .nav .sp{flex:1}
   .nav .who{font-size:.95em;opacity:.9;margin-right:6px}
@@ -118,6 +118,8 @@
   .form input,.form select{padding:.6em .7em;border:2px solid #dde;border-radius:8px;font-size:1em;outline:none;width:100%}
   .form input:focus{border-color:var(--bg2)}
   .row2{display:flex;gap:8px}
+  .lbl3{font-size:.85em;color:var(--bg2);margin-top:-4px}
+  .exp-soon{color:#b86e00;font-weight:600}.exp-dead{color:var(--bad);font-weight:700}
   .cred{background:#f4f2fb;border-radius:10px;padding:12px;font-family:monospace;font-size:1.05em;white-space:pre-wrap}
 </style>
 </head>
@@ -128,16 +130,21 @@
   <span class="brand">Quiz<b>Live</b></span>
   <button class="tab" data-v="vLib">📚 แบบทดสอบ</button>
   <button class="tab" data-v="vHist">📊 ประวัติผล</button>
+  <a class="tab" href="/wheel.html">🎡 วงล้อสุ่มโชค</a>
+  <a class="tab" href="/forms.html">📝 แบบประเมิน</a>
   <button class="tab hidden" data-v="vUsers" id="tabUsers">👥 จัดการผู้ใช้</button>
   <span class="sp"></span>
   <span class="who" id="who"></span>
   <button class="ghost small" id="btnPw">เปลี่ยนรหัสผ่าน</button>
+  <button class="ghost small" id="btnRc">รหัสกู้คืน</button>
   <button class="ghost small" id="btnLogout">ออกจากระบบ</button>
 </div>
 <div id="vLib">
   <input type="file" id="fileIn" accept=".json,application/json" class="hidden">
   <div class="wrap">
     <div id="dbWarn" class="banner red hidden">⚠️ ระบบยังไม่ได้เชื่อมฐานข้อมูลถาวร (DATABASE_URL) — แบบทดสอบ ผู้ใช้ และผลเกมจะหายเมื่อเซิร์ฟเวอร์รีสตาร์ต</div>
+    <div id="expWarn" class="banner hidden"></div>
+    <div id="rcWarn" class="banner hidden">🔑 คุณยังไม่มี <b>รหัสกู้คืน</b> — ใช้สำหรับรีเซ็ตรหัสผ่านเองเมื่อลืม <button class="go small" id="rcMake">สร้างรหัสกู้คืน</button></div>
     <div id="migrate" class="banner hidden"></div>
     <div class="toolbar"><h2 id="libTitle">แบบทดสอบของฉัน</h2>
       <button class="ghost small" id="btnImportFile">นำเข้าไฟล์ (.json)</button>
@@ -160,7 +167,7 @@
 
 <!-- ===================== จัดการผู้ใช้ ===================== -->
 <div id="vUsers" class="hidden">
-  <div class="wrap">
+  <div class="wrap" style="max-width:1320px">
     <div class="toolbar"><h2>จัดการผู้ใช้ (ผู้จัดกิจกรรม)</h2><button class="go" id="btnAddUser">+ เพิ่มผู้ใช้</button></div>
     <div id="userTable"></div>
     <p style="opacity:.75;font-size:.9em;margin-top:16px">• ผู้ใช้ใหม่และผู้ที่ถูกรีเซ็ตรหัส จะต้องเปลี่ยนรหัสผ่านเองเมื่อเข้าสู่ระบบครั้งแรก • การระงับบัญชีจะออกจากระบบทันที • ลบผู้ใช้แล้ว แบบทดสอบและประวัติผลของคนนั้นจะโอนมาเป็นของคุณ</p>
@@ -185,11 +192,35 @@
     <label>ชื่อผู้ใช้ (ภาษาอังกฤษ a-z, 0-9, จุด, ขีด — ใช้ตอนเข้าสู่ระบบ)</label><input id="uName" autocapitalize="off" spellcheck="false" placeholder="เช่น somchai.kat">
     <label>ชื่อที่แสดง</label><input id="uDisp" placeholder="เช่น สมชาย (HR Katsuya)">
     <label>สิทธิ์</label><select id="uRole"><option value="organizer">ผู้จัด (Organizer)</option><option value="super">Super Admin</option></select>
+    <label>อายุการใช้งานบัญชี</label>
+    <div class="row2"><select id="uExpSel">
+      <option value="none">ไม่จำกัด</option><option value="3">3 วัน</option><option value="7">7 วัน</option><option value="14">14 วัน</option>
+      <option value="15">15 วัน</option><option value="20">20 วัน</option><option value="30">30 วัน</option><option value="60">60 วัน</option><option value="90">90 วัน</option>
+      <option value="date">กำหนดวันสิ้นสุดเอง…</option><option value="keep" id="uExpKeep">คงเดิม</option></select>
+      <input type="date" id="uExpDate" class="hidden"></div>
+    <div class="lbl3" id="uExpInfo"></div>
     <label id="uPwLbl">รหัสผ่านชั่วคราว (ผู้ใช้จะต้องเปลี่ยนเองเมื่อเข้าครั้งแรก)</label>
     <div class="row2"><input id="uPw" autocomplete="off"><button type="button" class="small" id="uGen">สุ่มรหัส</button></div>
     <p class="warn" id="uErr"></p>
     <div style="display:flex;gap:10px;justify-content:flex-end"><button type="button" id="uCancel">ยกเลิก</button><button class="primary" type="submit" id="uOk">บันทึก</button></div>
   </form>
+</dialog>
+
+<dialog id="dlgRc">
+  <h3 style="margin-top:0">🔑 รหัสกู้คืน (Recovery Code)</h3>
+  <div id="rcAsk">
+    <p style="margin-top:0;color:var(--muted)">สร้างรหัสกู้คืนใหม่ — รหัสเดิม (ถ้ามี) จะใช้ไม่ได้ทันที</p>
+    <form class="form" id="rcForm"><label>ยืนยันรหัสผ่านปัจจุบัน</label><input type="password" id="rcPw" autocomplete="current-password" required>
+      <p class="warn" id="rcErr"></p>
+      <div style="display:flex;gap:10px;justify-content:flex-end"><button type="button" id="rcCancel">ยกเลิก</button><button class="primary" type="submit">สร้างรหัส</button></div></form>
+  </div>
+  <div id="rcShow" class="hidden">
+    <p style="margin-top:0">เก็บรหัสนี้ไว้ในที่ปลอดภัย (เช่น จดไว้ / ถ่ายภาพ / ส่งเข้า LINE ตัวเอง) — <b>ใช้รีเซ็ตรหัสผ่านเองที่หน้าเข้าสู่ระบบ เมื่อลืมรหัส</b></p>
+    <div class="cred" id="rcCode" style="font-size:1.8em;text-align:center;letter-spacing:3px;font-weight:700"></div>
+    <p style="color:var(--bad);font-size:.9em">รหัสนี้จะแสดงครั้งเดียว และใช้ได้ 1 ครั้ง (ใช้แล้วระบบออกรหัสใหม่ให้)</p>
+    <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="rcSaved" style="width:18px;height:18px"> ฉันเก็บรหัสกู้คืนไว้แล้ว</label>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:10px"><button id="rcCopy">คัดลอก</button><button class="primary" id="rcDone" disabled>เสร็จสิ้น</button></div>
+  </div>
 </dialog>
 
 <dialog id="dlgCred">
@@ -282,10 +313,17 @@ async function boot() {
   $('#who').innerHTML = `${esc(ME.displayName)} (${esc(ME.username)})${ME.role === 'super' ? '<small>SUPER</small>' : ''}`;
   $('#tabUsers').classList.toggle('hidden', ME.role !== 'super');
   $('#dbWarn').classList.toggle('hidden', d.persistent);
-  if (ME.mustChange) openPw(true);
-  else { await renderLib(); checkMigrate(); }
+  renderBanners();
+  if (ME.mustChange) return openPw(true);
+  const h = location.hash.slice(1);
+  history.replaceState(null, '', location.pathname);
+  if (h === 'hist') return go('vHist');
+  if (h === 'users' && ME.role === 'super') return go('vUsers');
+  await renderLib(); checkMigrate();
+  if (h === 'pw') openPw(false);
+  if (h === 'rc') openRc();
 }
-document.querySelectorAll('#nav .tab').forEach(t => t.onclick = () => go(t.dataset.v));
+document.querySelectorAll('#nav .tab[data-v]').forEach(t => t.onclick = () => go(t.dataset.v));
 function go(v) {
   view(v);
   if (v === 'vLib') renderLib();
@@ -311,11 +349,46 @@ $('#pwForm').onsubmit = async e => {
   e.preventDefault();
   if ($('#pwNew').value !== $('#pwNew2').value) return ($('#pwErr').textContent = 'รหัสผ่านใหม่ทั้ง 2 ช่องไม่ตรงกัน');
   try {
-    await api('POST', '/api/change-password', { current: $('#pwCur').value, next: $('#pwNew').value });
-    $('#dlgPw').close(); alert('เปลี่ยนรหัสผ่านเรียบร้อย');
+    const r = await api('POST', '/api/change-password', { current: $('#pwCur').value, next: $('#pwNew').value });
+    $('#dlgPw').close();
+    if (r.recoveryCode) { ME.hasRecovery = true; await showRc(r.recoveryCode); } else alert('เปลี่ยนรหัสผ่านเรียบร้อย');
     if (pwForced) { pwForced = false; ME.mustChange = false; await renderLib(); checkMigrate(); }
+    renderBanners();
   } catch (ex) { $('#pwErr').textContent = ex.message; }
 };
+
+/* ---- รหัสกู้คืน + แจ้งเตือนอายุบัญชี ---- */
+function showRc(code) {
+  return new Promise(res => {
+    $('#rcAsk').classList.add('hidden'); $('#rcShow').classList.remove('hidden');
+    $('#rcCode').textContent = code; $('#rcSaved').checked = false; $('#rcDone').disabled = true;
+    if (!$('#dlgRc').open) $('#dlgRc').showModal();
+    $('#rcDone').onclick = () => { $('#dlgRc').close(); res(); };
+  });
+}
+$('#dlgRc').addEventListener('cancel', e => { if (!$('#rcShow').classList.contains('hidden') && !$('#rcSaved').checked) e.preventDefault(); });
+$('#rcSaved').onchange = () => $('#rcDone').disabled = !$('#rcSaved').checked;
+$('#rcCopy').onclick = () => navigator.clipboard?.writeText(`QuizLive รหัสกู้คืนของ ${ME.username}: ${$('#rcCode').textContent}`).then(() => { $('#rcCopy').textContent = 'คัดลอกแล้ว ✓'; setTimeout(() => $('#rcCopy').textContent = 'คัดลอก', 1500); });
+function openRc() { $('#rcAsk').classList.remove('hidden'); $('#rcShow').classList.add('hidden'); $('#rcErr').textContent = ''; $('#rcForm').reset(); $('#dlgRc').showModal(); }
+$('#btnRc').onclick = openRc;
+$('#rcCancel').onclick = () => $('#dlgRc').close();
+$('#rcForm').onsubmit = async e => {
+  e.preventDefault();
+  try { const r = await api('POST', '/api/recovery-code', { password: $('#rcPw').value }); ME.hasRecovery = true; renderBanners(); await showRc(r.recoveryCode); }
+  catch (ex) { $('#rcErr').textContent = ex.message; }
+};
+function expText(t) {
+  if (!t) return 'ไม่จำกัด';
+  const d = Math.ceil((t - Date.now()) / 864e5);
+  return d <= 0 ? 'หมดอายุแล้ว' : `เหลือ ${d} วัน (ถึง ${new Date(t).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })})`;
+}
+function renderBanners() {
+  $('#rcWarn').classList.toggle('hidden', !!ME.hasRecovery);
+  const t = ME.expiresAt, w = $('#expWarn');
+  if (t) { const d = Math.ceil((t - Date.now()) / 864e5); w.innerHTML = `⏳ บัญชีของคุณใช้งานได้ถึง <b>${new Date(t).toLocaleString('th-TH', { dateStyle: 'long', timeStyle: 'short' })}</b> (เหลือ ${d} วัน) — ต้องการต่ออายุ ติดต่อผู้ดูแลระบบ`; w.classList.toggle('red', d <= 3); }
+  w.classList.toggle('hidden', !t);
+}
+$('#rcMake').onclick = openRc;
 
 /* ---- ย้ายแบบทดสอบเดิมจากเครื่องนี้ (ระบบเก่าเก็บใน localStorage) ---- */
 function checkMigrate() {
@@ -391,7 +464,7 @@ function view(id) {
   if (id !== 'vGame') { confettiOn = false; $('#confetti').classList.add('hidden'); }
   ['vLib', 'vEdit', 'vGame', 'vHist', 'vUsers'].forEach(v => $('#' + v).classList.toggle('hidden', v !== id));
   $('#nav').classList.toggle('hidden', id === 'vEdit' || id === 'vGame');
-  document.querySelectorAll('#nav .tab').forEach(t => t.classList.toggle('on', t.dataset.v === id));
+  document.querySelectorAll('#nav .tab[data-v]').forEach(t => t.classList.toggle('on', t.dataset.v === id));
 }
 function openEditor(q) { editing = JSON.parse(JSON.stringify(q)); $('#edTitle').value = editing.title; renderEditor(); view('vEdit'); window.scrollTo(0, 0); }
 
@@ -726,24 +799,49 @@ let USERS = [], editUser = null;
 async function renderUsers() {
   $('#userTable').innerHTML = '<div class="empty">กำลังโหลด…</div>';
   try { USERS = (await api('GET', '/api/users')).users; } catch (e) { $('#userTable').innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
-  $('#userTable').innerHTML = `<table class="list"><tr><th>ชื่อผู้ใช้</th><th>ชื่อที่แสดง</th><th>สิทธิ์</th><th>สถานะ</th><th>เข้าใช้ล่าสุด</th><th>แบบทดสอบ / เกม</th><th></th></tr>
+  $('#userTable').innerHTML = `<table class="list"><tr><th>ชื่อผู้ใช้</th><th>ชื่อที่แสดง</th><th>สิทธิ์</th><th>สถานะ</th><th>อายุบัญชี</th><th>เข้าใช้ล่าสุด</th><th>แบบทดสอบ / เกม</th><th></th></tr>
     ${USERS.map(u => { const me = u.id === ME.id; return `<tr class="${u.active ? '' : 'off'}"><td><b>${esc(u.username)}</b>${me ? ' (คุณ)' : ''}</td><td>${esc(u.displayName)}</td>
       <td>${u.role === 'super' ? '<span class="pill sup">Super Admin</span>' : 'ผู้จัด'}</td>
       <td>${u.active ? '<span class="pill ok">ใช้งาน</span>' : '<span class="pill no">ระงับ</span>'}${u.mustChange ? '<br><small style="color:var(--muted)">รอเปลี่ยนรหัส</small>' : ''}</td>
+      <td>${!u.expiresAt ? '<span style="color:var(--muted)">ไม่จำกัด</span>' : u.expired ? `<span class="exp-dead">หมดอายุแล้ว</span><br><small>${dt(u.expiresAt)}</small>` : `<span class="${(u.expiresAt - Date.now()) < 3 * 864e5 ? 'exp-soon' : ''}">เหลือ ${Math.ceil((u.expiresAt - Date.now()) / 864e5)} วัน</span><br><small style="color:var(--muted)">ถึง ${dt(u.expiresAt)}</small>`}</td>
       <td>${u.lastLogin ? dt(u.lastLogin) : '-'}</td><td>${u.quizCount} / ${u.gameCount}</td>
       <td><div class="acts"><button class="small" data-a="edit" data-id="${u.id}">แก้ไข</button>
+        ${me ? '' : `<button class="small" data-a="extend" data-id="${u.id}">${u.expired ? '⏳ ต่ออายุ' : 'อายุบัญชี'}</button>`}
         <button class="small" data-a="reset" data-id="${u.id}">รีเซ็ตรหัส</button>
         ${me ? '' : `<button class="small" data-a="toggle" data-id="${u.id}">${u.active ? 'ระงับ' : 'เปิดใช้'}</button><button class="small danger" data-a="del" data-id="${u.id}">ลบ</button>`}</div></td></tr>`; }).join('')}</table>`;
 }
 const genPw = () => { const c = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'; const a = new Uint32Array(10); crypto.getRandomValues(a); return [...a].map(x => c[x % c.length]).join(''); };
-function showCred(u, pw) {
-  $('#credText').textContent = `ลิงก์เข้าสู่ระบบ: ${location.origin}/login.html\nชื่อผู้ใช้: ${u}\nรหัสผ่านชั่วคราว: ${pw}`;
+function showCred(u, pw, exp) {
+  $('#credText').textContent = `ลิงก์เข้าสู่ระบบ: ${location.origin}/login.html\nชื่อผู้ใช้: ${u}\nรหัสผ่านชั่วคราว: ${pw}` + (exp ? `\nบัญชีใช้งานได้ถึง: ${new Date(exp).toLocaleString('th-TH', { dateStyle: 'long', timeStyle: 'short' })}` : '') + `\n\nเข้าครั้งแรกระบบจะให้ตั้งรหัสผ่านใหม่ และออก "รหัสกู้คืน" ไว้ใช้รีเซ็ตรหัสเองเมื่อลืม`;
   $('#dlgCred').showModal();
 }
 $('#credCopy').onclick = () => navigator.clipboard?.writeText($('#credText').textContent).then(() => { $('#credCopy').textContent = 'คัดลอกแล้ว ✓'; setTimeout(() => $('#credCopy').textContent = 'คัดลอก', 1500); });
 $('#credClose').onclick = () => $('#dlgCred').close();
-function openUser(u) {
+// วันหมดอายุ = สิ้นวัน (23:59 เวลาไทย) ของวันที่เลือก
+const endOfDayTH = dateStr => new Date(dateStr + 'T23:59:59+07:00').getTime();
+const thDateStr = t => new Date(t + 7 * 3600e3).toISOString().slice(0, 10);
+function expValue() {
+  const v = $('#uExpSel').value;
+  if (v === 'keep') return undefined;
+  if (v === 'none') return null;
+  if (v === 'date') return $('#uExpDate').value ? endOfDayTH($('#uExpDate').value) : NaN;
+  return endOfDayTH(thDateStr(Date.now() + (+v - 1) * 864e5)); // นับวันนี้เป็นวันที่ 1
+}
+function updExp() {
+  $('#uExpDate').classList.toggle('hidden', $('#uExpSel').value !== 'date');
+  const v = expValue();
+  $('#uExpInfo').textContent = v === undefined ? (editUser && editUser.expiresAt ? 'ปัจจุบัน: ' + expText(editUser.expiresAt) : 'ปัจจุบัน: ไม่จำกัด')
+    : v === null ? 'ใช้งานได้ไม่จำกัด' : Number.isNaN(v) ? 'กรุณาเลือกวันที่' : v < Date.now() ? '⚠️ วันที่ต้องเป็นวันนี้หรืออนาคต'
+    : `ใช้งานได้ถึง ${new Date(v).toLocaleString('th-TH', { dateStyle: 'full', timeStyle: 'short' })} (${Math.ceil((v - Date.now()) / 864e5)} วัน)`;
+}
+$('#uExpSel').onchange = updExp; $('#uExpDate').oninput = updExp;
+function openUser(u, focusExp) {
   editUser = u;
+  const self = u && u.id === ME.id;
+  $('#uExpKeep').hidden = !u; $('#uExpSel').disabled = !!self;
+  $('#uExpSel').value = u ? (focusExp ? '30' : 'keep') : 'none';
+  $('#uExpDate').value = thDateStr(Date.now() + 7 * 864e5); $('#uExpDate').min = thDateStr(Date.now());
+  setTimeout(updExp);
   $('#uTitle').textContent = u ? 'แก้ไขผู้ใช้' : 'เพิ่มผู้ใช้';
   $('#uName').value = u ? u.username : ''; $('#uName').disabled = !!u;
   $('#uDisp').value = u ? u.displayName : '';
@@ -759,10 +857,13 @@ $('#uCancel').onclick = () => $('#dlgUser').close();
 $('#uForm').onsubmit = async e => {
   e.preventDefault();
   try {
-    if (editUser) await api('PATCH', '/api/users/' + editUser.id, { displayName: $('#uDisp').value, ...(editUser.id === ME.id ? {} : { role: $('#uRole').value }) });
+    const exp = expValue();
+    if (Number.isNaN(exp)) throw new Error('กรุณาเลือกวันสิ้นสุด');
+    if (exp && exp < Date.now()) throw new Error('วันสิ้นสุดต้องเป็นวันนี้หรืออนาคต');
+    if (editUser) await api('PATCH', '/api/users/' + editUser.id, { displayName: $('#uDisp').value, ...(editUser.id === ME.id ? {} : { role: $('#uRole').value }), ...(exp !== undefined && editUser.id !== ME.id ? { expiresAt: exp } : {}) });
     else {
-      await api('POST', '/api/users', { username: $('#uName').value, displayName: $('#uDisp').value, role: $('#uRole').value, password: $('#uPw').value });
-      showCred($('#uName').value.trim().toLowerCase(), $('#uPw').value);
+      await api('POST', '/api/users', { username: $('#uName').value, displayName: $('#uDisp').value, role: $('#uRole').value, password: $('#uPw').value, expiresAt: exp });
+      showCred($('#uName').value.trim().toLowerCase(), $('#uPw').value, exp);
     }
     $('#dlgUser').close(); renderUsers();
   } catch (ex) { $('#uErr').textContent = ex.message; }
@@ -771,7 +872,7 @@ $('#userTable').onclick = async e => {
   const b = e.target.closest('button[data-a]'); if (!b) return;
   const u = USERS.find(x => String(x.id) === b.dataset.id); if (!u) return;
   try {
-    if (b.dataset.a === 'edit') return openUser(u);
+    if (b.dataset.a === 'edit' || b.dataset.a === 'extend') return openUser(u, b.dataset.a === 'extend');
     if (b.dataset.a === 'reset') {
       if (!confirm(`รีเซ็ตรหัสผ่านของ “${u.displayName}”? ระบบจะออกรหัสชั่วคราวใหม่ และให้ผู้ใช้ตั้งรหัสเองตอนเข้าครั้งถัดไป`)) return;
       const pw = genPw(); await api('PATCH', '/api/users/' + u.id, { password: pw });

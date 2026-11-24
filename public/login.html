@@ -33,7 +33,25 @@
     <button class="primary" id="btn" type="submit">เข้าสู่ระบบ</button>
     <div class="errbox hidden" id="err"></div>
   </form>
-  <div class="foot">ลืมรหัสผ่าน? ติดต่อผู้ดูแลระบบ (Super Admin) เพื่อรีเซ็ต<br><a href="/">ไปหน้าผู้เล่น (ใส่ PIN)</a></div>
+  <form class="card hidden" id="ff" autocomplete="off">
+    <h3 style="margin:0">🔑 ลืมรหัสผ่าน</h3>
+    <div style="color:var(--muted);font-size:.9em">ใช้ <b>รหัสกู้คืน</b> ที่ได้รับตอนตั้งรหัสผ่านครั้งแรก (รูปแบบ XXXX-XXXX-XXXX)</div>
+    <label for="fu">ชื่อผู้ใช้</label><input id="fu" autocapitalize="off" spellcheck="false" required>
+    <label for="fc">รหัสกู้คืน</label><input id="fc" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX" required style="letter-spacing:2px;text-transform:uppercase">
+    <label for="fp">รหัสผ่านใหม่ (อย่างน้อย 8 ตัวอักษร)</label><input id="fp" type="password" autocomplete="new-password" required>
+    <label for="fp2">ยืนยันรหัสผ่านใหม่</label><input id="fp2" type="password" autocomplete="new-password" required>
+    <button class="primary" id="fbtn" type="submit">ตั้งรหัสผ่านใหม่</button>
+    <div class="errbox hidden" id="ferr"></div>
+    <button type="button" class="small" id="fback" style="background:#f4f2fb;box-shadow:none">← กลับไปหน้าเข้าสู่ระบบ</button>
+  </form>
+  <div class="card hidden" id="fdone">
+    <h3 style="margin:0">✅ ตั้งรหัสผ่านใหม่เรียบร้อย</h3>
+    <div>รหัสกู้คืนเดิมถูกใช้แล้ว — นี่คือ <b>รหัสกู้คืนใหม่</b> ของคุณ เก็บไว้ใช้ครั้งต่อไป:</div>
+    <div id="fnew" style="background:#f4f2fb;border-radius:10px;padding:14px;font-family:monospace;font-size:1.7em;font-weight:700;text-align:center;letter-spacing:3px"></div>
+    <div style="color:var(--bad);font-size:.9em">รหัสนี้จะแสดงครั้งเดียว</div>
+    <div style="display:flex;gap:8px"><button type="button" id="fcopy" style="flex:1">คัดลอก</button><button class="primary" type="button" id="flogin" style="flex:1">เข้าสู่ระบบ</button></div>
+  </div>
+  <div class="foot"><a href="#" id="forgot">ลืมรหัสผ่าน?</a> ใช้รหัสกู้คืนตั้งรหัสใหม่เอง (ถ้าไม่มีรหัสกู้คืน ติดต่อ Super Admin)<br><a href="/">ไปหน้าผู้เล่น (ใส่ PIN)</a></div>
 </div>
 <script>
 const $ = s => document.querySelector(s);
@@ -54,6 +72,25 @@ $('#f').onsubmit = async e => {
   }
 };
 $('#u').focus();
+const show = id => ['f', 'ff', 'fdone'].forEach(x => $('#' + x).classList.toggle('hidden', x !== id));
+$('#forgot').onclick = e => { e.preventDefault(); show('ff'); $('#fu').value = $('#u').value; ($('#fu').value ? $('#fc') : $('#fu')).focus(); };
+$('#fback').onclick = () => show('f');
+$('#ff').onsubmit = async e => {
+  e.preventDefault();
+  const er = m => { $('#ferr').textContent = m; $('#ferr').classList.toggle('hidden', !m); };
+  er('');
+  if ($('#fp').value !== $('#fp2').value) return er('รหัสผ่านใหม่ทั้ง 2 ช่องไม่ตรงกัน');
+  $('#fbtn').disabled = true;
+  try {
+    const r = await fetch('/api/forgot-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: $('#fu').value, code: $('#fc').value, next: $('#fp').value }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'ไม่สำเร็จ');
+    $('#fnew').textContent = d.recoveryCode; show('fdone');
+  } catch (ex) { er(ex.message === 'Failed to fetch' ? 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ลองใหม่อีกครั้ง' : ex.message); }
+  $('#fbtn').disabled = false;
+};
+$('#fcopy').onclick = () => navigator.clipboard?.writeText(`QuizLive รหัสกู้คืนของ ${$('#fu').value.trim().toLowerCase()}: ${$('#fnew').textContent}`).then(() => $('#fcopy').textContent = 'คัดลอกแล้ว ✓');
+$('#flogin').onclick = () => { $('#u').value = $('#fu').value; $('#p').value = ''; show('f'); $('#p').focus(); };
 </script>
 </body>
 </html>
