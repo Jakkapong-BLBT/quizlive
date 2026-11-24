@@ -45,7 +45,8 @@ const needAuth = (superOnly = false) => wrap(async (req, res, next) => {
 });
 // ป้องกันการส่งฟอร์มข้ามเว็บ: คำสั่งที่เปลี่ยนข้อมูลต้องเป็น JSON เท่านั้น
 app.use('/api', (req, res, next) => {
-  if (!['GET', 'HEAD'].includes(req.method) && !req.is('application/json')) return res.status(415).json({ error: 'รูปแบบคำขอไม่ถูกต้อง' });
+  // DELETE ส่งข้ามเว็บด้วยฟอร์มไม่ได้ (เบราว์เซอร์บังคับตรวจ CORS) จึงไม่ต้องมีข้อมูลแนบ
+  if (!['GET', 'HEAD', 'DELETE'].includes(req.method) && !req.is('application/json')) return res.status(415).json({ error: 'รูปแบบคำขอไม่ถูกต้อง' });
   next();
 });
 const pub = u => ({ id: u.id, username: u.username, displayName: u.display_name, role: u.role, active: u.active, mustChange: u.must_change, lastLogin: u.last_login ? Number(u.last_login) : null, createdAt: u.created_at ? Number(u.created_at) : null,
