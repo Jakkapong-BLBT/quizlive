@@ -93,23 +93,111 @@
   .tabs button.on{background:var(--bg2);color:#fff}
   .pbar{display:inline-block;height:10px;border-radius:5px;background:var(--ok);vertical-align:middle}
   .confetti{position:fixed;inset:0;pointer-events:none;z-index:5}
+  /* nav */
+  .nav{display:flex;align-items:center;gap:6px;padding:10px 22px;background:rgba(0,0,0,.25);flex-wrap:wrap}
+  .nav .brand{font-size:1.5em;margin-right:14px}
+  .nav .tab{background:transparent;color:#fff;box-shadow:none;opacity:.75;padding:.5em .9em}
+  .nav .tab.on{background:rgba(255,255,255,.16);opacity:1}
+  .nav .sp{flex:1}
+  .nav .who{font-size:.95em;opacity:.9;margin-right:6px}
+  .nav .who small{display:inline-block;background:var(--accent);color:var(--ink);border-radius:6px;padding:0 6px;margin-left:6px;font-weight:600}
+  .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+  .toolbar h2{margin:0;flex:1}
+  .banner{background:#fff4d6;color:#6b4e00;border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .banner.red{background:#ffe3e7;color:#8a0c22}
+  .owner{display:inline-block;background:#efeafd;color:var(--bg2);border-radius:6px;padding:1px 8px;font-size:.85em;font-weight:600}
+  table.list{width:100%;border-collapse:collapse;background:#fff;color:var(--ink);border-radius:12px;overflow:hidden}
+  table.list th,table.list td{padding:10px 12px;border-bottom:1px solid #ececf3;text-align:left;vertical-align:middle}
+  table.list th{background:#f4f2fb;font-weight:600}
+  table.list td .acts{display:flex;gap:6px;flex-wrap:wrap}
+  table.list tr.off td{opacity:.5}
+  .pill{display:inline-block;white-space:nowrap;border-radius:20px;padding:1px 10px;font-size:.85em;font-weight:600}
+  .pill.ok{background:#dff5d8;color:#1f6b0b}.pill.no{background:#eee;color:#666}.pill.sup{background:var(--accent);color:var(--ink)}
+  .form{display:flex;flex-direction:column;gap:10px}
+  .form label{font-size:.9em;color:var(--muted);margin-bottom:-6px}
+  .form input,.form select{padding:.6em .7em;border:2px solid #dde;border-radius:8px;font-size:1em;outline:none;width:100%}
+  .form input:focus{border-color:var(--bg2)}
+  .row2{display:flex;gap:8px}
+  .cred{background:#f4f2fb;border-radius:10px;padding:12px;font-family:monospace;font-size:1.05em;white-space:pre-wrap}
 </style>
 </head>
 <body>
 
 <!-- ===================== คลังแบบทดสอบ ===================== -->
+<div class="nav" id="nav">
+  <span class="brand">Quiz<b>Live</b></span>
+  <button class="tab" data-v="vLib">📚 แบบทดสอบ</button>
+  <button class="tab" data-v="vHist">📊 ประวัติผล</button>
+  <button class="tab hidden" data-v="vUsers" id="tabUsers">👥 จัดการผู้ใช้</button>
+  <span class="sp"></span>
+  <span class="who" id="who"></span>
+  <button class="ghost small" id="btnPw">เปลี่ยนรหัสผ่าน</button>
+  <button class="ghost small" id="btnLogout">ออกจากระบบ</button>
+</div>
 <div id="vLib">
-  <div class="top"><span class="brand">Quiz<b>Live</b></span><span>สำหรับผู้จัดกิจกรรม</span><span class="sp"></span>
-    <button class="ghost small" id="btnImportFile">นำเข้าไฟล์ (.json)</button>
-    <button class="go" id="btnNew">+ สร้างแบบทดสอบใหม่</button>
-    <input type="file" id="fileIn" accept=".json,application/json" class="hidden">
-  </div>
+  <input type="file" id="fileIn" accept=".json,application/json" class="hidden">
   <div class="wrap">
-    <h2>แบบทดสอบของฉัน</h2>
-    <div class="lib" id="libList"></div>
-    <p style="opacity:.7;font-size:.9em;margin-top:30px">แบบทดสอบถูกบันทึกไว้ในเบราว์เซอร์เครื่องนี้ — แนะนำกด “ส่งออก” เก็บไฟล์สำรองไว้ เพื่อใช้กับเครื่องอื่นหรือกันข้อมูลหาย</p>
+    <div id="dbWarn" class="banner red hidden">⚠️ ระบบยังไม่ได้เชื่อมฐานข้อมูลถาวร (DATABASE_URL) — แบบทดสอบ ผู้ใช้ และผลเกมจะหายเมื่อเซิร์ฟเวอร์รีสตาร์ต</div>
+    <div id="migrate" class="banner hidden"></div>
+    <div class="toolbar"><h2 id="libTitle">แบบทดสอบของฉัน</h2>
+      <button class="ghost small" id="btnImportFile">นำเข้าไฟล์ (.json)</button>
+      <button class="go" id="btnNew">+ สร้างแบบทดสอบใหม่</button></div>
+    <div class="lib" id="libList"><div class="empty">กำลังโหลด…</div></div>
+    <p style="opacity:.7;font-size:.9em;margin-top:30px">แบบทดสอบถูกบันทึกบนเซิร์ฟเวอร์ — เข้าสู่ระบบจากเครื่องไหนก็ใช้งานได้</p>
   </div>
 </div>
+
+<!-- ===================== ประวัติผล ===================== -->
+<div id="vHist" class="hidden">
+  <div class="wrap">
+    <div id="histList">
+      <div class="toolbar"><h2>ประวัติผลการแข่งขัน</h2></div>
+      <div id="histTable"></div>
+    </div>
+    <div id="histDetail" class="hidden"></div>
+  </div>
+</div>
+
+<!-- ===================== จัดการผู้ใช้ ===================== -->
+<div id="vUsers" class="hidden">
+  <div class="wrap">
+    <div class="toolbar"><h2>จัดการผู้ใช้ (ผู้จัดกิจกรรม)</h2><button class="go" id="btnAddUser">+ เพิ่มผู้ใช้</button></div>
+    <div id="userTable"></div>
+    <p style="opacity:.75;font-size:.9em;margin-top:16px">• ผู้ใช้ใหม่และผู้ที่ถูกรีเซ็ตรหัส จะต้องเปลี่ยนรหัสผ่านเองเมื่อเข้าสู่ระบบครั้งแรก • การระงับบัญชีจะออกจากระบบทันที • ลบผู้ใช้แล้ว แบบทดสอบและประวัติผลของคนนั้นจะโอนมาเป็นของคุณ</p>
+  </div>
+</div>
+
+<dialog id="dlgPw">
+  <h3 style="margin-top:0" id="pwTitle">เปลี่ยนรหัสผ่าน</h3>
+  <p id="pwNote" class="hidden" style="margin-top:0;color:var(--muted)">เพื่อความปลอดภัย กรุณาตั้งรหัสผ่านใหม่ของคุณเองก่อนเริ่มใช้งาน</p>
+  <form class="form" id="pwForm">
+    <label>รหัสผ่านปัจจุบัน (หรือรหัสชั่วคราวที่ได้รับ)</label><input type="password" id="pwCur" autocomplete="current-password" required>
+    <label>รหัสผ่านใหม่ (อย่างน้อย 8 ตัวอักษร)</label><input type="password" id="pwNew" autocomplete="new-password" required>
+    <label>ยืนยันรหัสผ่านใหม่</label><input type="password" id="pwNew2" autocomplete="new-password" required>
+    <p class="warn" id="pwErr"></p>
+    <div style="display:flex;gap:10px;justify-content:flex-end"><button type="button" id="pwCancel">ยกเลิก</button><button class="primary" type="submit">บันทึกรหัสผ่าน</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlgUser">
+  <h3 style="margin-top:0" id="uTitle">เพิ่มผู้ใช้</h3>
+  <form class="form" id="uForm">
+    <label>ชื่อผู้ใช้ (ภาษาอังกฤษ a-z, 0-9, จุด, ขีด — ใช้ตอนเข้าสู่ระบบ)</label><input id="uName" autocapitalize="off" spellcheck="false" placeholder="เช่น somchai.kat">
+    <label>ชื่อที่แสดง</label><input id="uDisp" placeholder="เช่น สมชาย (HR Katsuya)">
+    <label>สิทธิ์</label><select id="uRole"><option value="organizer">ผู้จัด (Organizer)</option><option value="super">Super Admin</option></select>
+    <label id="uPwLbl">รหัสผ่านชั่วคราว (ผู้ใช้จะต้องเปลี่ยนเองเมื่อเข้าครั้งแรก)</label>
+    <div class="row2"><input id="uPw" autocomplete="off"><button type="button" class="small" id="uGen">สุ่มรหัส</button></div>
+    <p class="warn" id="uErr"></p>
+    <div style="display:flex;gap:10px;justify-content:flex-end"><button type="button" id="uCancel">ยกเลิก</button><button class="primary" type="submit" id="uOk">บันทึก</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlgCred">
+  <h3 style="margin-top:0">ส่งข้อมูลนี้ให้ผู้ใช้</h3>
+  <div class="cred" id="credText"></div>
+  <p style="color:var(--muted);font-size:.9em">ผู้ใช้จะถูกบังคับให้ตั้งรหัสผ่านใหม่เมื่อเข้าสู่ระบบครั้งแรก — รหัสนี้จะไม่แสดงอีก</p>
+  <div style="display:flex;gap:10px;justify-content:flex-end"><button id="credCopy">คัดลอก</button><button class="primary" id="credClose">เสร็จสิ้น</button></div>
+</dialog>
 
 <!-- ===================== แก้ไขแบบทดสอบ ===================== -->
 <div id="vEdit" class="hidden">
@@ -168,30 +256,93 @@
 <script src="/socket.io/socket.io.js"></script>
 <script src="common.js"></script>
 <script>
-/* ---------------- คลังแบบทดสอบ (เก็บใน localStorage) ---------------- */
-const LS = 'ql_quizzes';
-const uid = () => Math.random().toString(36).slice(2, 10);
-const loadQuizzes = () => { try { return JSON.parse(localStorage.getItem(LS)) || []; } catch { return []; } };
-const saveQuizzes = list => { try { localStorage.setItem(LS, JSON.stringify(list)); return true; } catch (e) { alert('บันทึกไม่สำเร็จ: พื้นที่เบราว์เซอร์เต็ม (รูปภาพอาจใหญ่เกินไป ลองใช้ลิงก์รูปแทน)'); return false; } };
+/* ---------------- API + ผู้ใช้ ---------------- */
+let ME = null, QZ = [];
+async function api(method, url, body) {
+  const r = await fetch(url, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
+  let d = {}; try { d = await r.json(); } catch {}
+  if (r.status === 401) { location.replace('/login.html'); throw new Error('กรุณาเข้าสู่ระบบ'); }
+  if (d.mustChange) { openPw(true); throw new Error(d.error); }
+  if (!r.ok) throw new Error(d.error || 'เกิดข้อผิดพลาด');
+  return d;
+}
+const fail = e => alert(e.message);
 const newQ = (tf) => tf
   ? { text: '', image: '', options: ['ถูก', 'ผิด', '', ''], correct: [0], time: 20, points: 1000 }
   : { text: '', image: '', options: ['', '', '', ''], correct: [], time: 20, points: 1000 };
+const SAMPLE = { title: 'ตัวอย่าง: ความรู้รอบตัว', questions: [
+  { text: 'ประเทศไทยมีทั้งหมดกี่จังหวัด (รวมกรุงเทพฯ)', image: '', options: ['76', '77', '78', '75'], correct: [1], time: 20, points: 1000 },
+  { text: 'ดาวเคราะห์ดวงใดใหญ่ที่สุดในระบบสุริยะ', image: '', options: ['โลก', 'ดาวเสาร์', 'ดาวพฤหัสบดี', 'ดาวอังคาร'], correct: [2], time: 20, points: 1000 },
+  { text: 'น้ำเดือดที่อุณหภูมิ 100 องศาเซลเซียส (ที่ระดับน้ำทะเล)', image: '', options: ['ถูก', 'ผิด', '', ''], correct: [0], time: 10, points: 1000 },
+] };
 
-if (!localStorage.getItem(LS)) saveQuizzes([{
-  id: uid(), title: 'ตัวอย่าง: ความรู้รอบตัว', updated: Date.now(), questions: [
-    { text: 'ประเทศไทยมีทั้งหมดกี่จังหวัด (รวมกรุงเทพฯ)', image: '', options: ['76', '77', '78', '75'], correct: [1], time: 20, points: 1000 },
-    { text: 'ดาวเคราะห์ดวงใดใหญ่ที่สุดในระบบสุริยะ', image: '', options: ['โลก', 'ดาวเสาร์', 'ดาวพฤหัสบดี', 'ดาวอังคาร'], correct: [2], time: 20, points: 1000 },
-    { text: 'น้ำเดือดที่อุณหภูมิ 100 องศาเซลเซียส (ที่ระดับน้ำทะเล)', image: '', options: ['ถูก', 'ผิด', '', ''], correct: [0], time: 10, points: 1000 },
-    { text: '1 ปีมีกี่สัปดาห์ (โดยประมาณ)', image: '', options: ['48', '50', '52', '54'], correct: [2], time: 15, points: 2000 },
-  ]
-}]);
+async function boot() {
+  const d = await api('GET', '/api/me');
+  ME = d.user;
+  $('#who').innerHTML = `${esc(ME.displayName)} (${esc(ME.username)})${ME.role === 'super' ? '<small>SUPER</small>' : ''}`;
+  $('#tabUsers').classList.toggle('hidden', ME.role !== 'super');
+  $('#dbWarn').classList.toggle('hidden', d.persistent);
+  if (ME.mustChange) openPw(true);
+  else { await renderLib(); checkMigrate(); }
+}
+document.querySelectorAll('#nav .tab').forEach(t => t.onclick = () => go(t.dataset.v));
+function go(v) {
+  view(v);
+  if (v === 'vLib') renderLib();
+  if (v === 'vHist') renderHist();
+  if (v === 'vUsers') renderUsers();
+}
+$('#btnLogout').onclick = async () => { if (!confirm('ออกจากระบบ?')) return; await api('POST', '/api/logout', {}).catch(() => {}); location.replace('/login.html'); };
 
-function renderLib() {
-  const list = loadQuizzes().sort((a, b) => b.updated - a.updated);
-  $('#libList').innerHTML = list.length ? list.map(q => `
+/* ---- เปลี่ยนรหัสผ่าน ---- */
+let pwForced = false;
+function openPw(forced) {
+  pwForced = !!forced;
+  $('#pwTitle').textContent = forced ? 'ตั้งรหัสผ่านใหม่' : 'เปลี่ยนรหัสผ่าน';
+  $('#pwNote').classList.toggle('hidden', !forced);
+  $('#pwCancel').classList.toggle('hidden', forced);
+  $('#pwErr').textContent = ''; $('#pwForm').reset();
+  if (!$('#dlgPw').open) $('#dlgPw').showModal();
+}
+$('#dlgPw').addEventListener('cancel', e => { if (pwForced) e.preventDefault(); });
+$('#btnPw').onclick = () => openPw(false);
+$('#pwCancel').onclick = () => $('#dlgPw').close();
+$('#pwForm').onsubmit = async e => {
+  e.preventDefault();
+  if ($('#pwNew').value !== $('#pwNew2').value) return ($('#pwErr').textContent = 'รหัสผ่านใหม่ทั้ง 2 ช่องไม่ตรงกัน');
+  try {
+    await api('POST', '/api/change-password', { current: $('#pwCur').value, next: $('#pwNew').value });
+    $('#dlgPw').close(); alert('เปลี่ยนรหัสผ่านเรียบร้อย');
+    if (pwForced) { pwForced = false; ME.mustChange = false; await renderLib(); checkMigrate(); }
+  } catch (ex) { $('#pwErr').textContent = ex.message; }
+};
+
+/* ---- ย้ายแบบทดสอบเดิมจากเครื่องนี้ (ระบบเก่าเก็บใน localStorage) ---- */
+function checkMigrate() {
+  let old = []; try { old = JSON.parse(localStorage.getItem('ql_quizzes')) || []; } catch {}
+  if (!old.length || localStorage.getItem('ql_migrated_' + ME.id)) return;
+  const box = $('#migrate');
+  box.innerHTML = `📦 พบแบบทดสอบ ${old.length} ชุดที่เคยสร้างไว้ในเครื่องนี้ (ระบบเดิม) <button class="go small" id="mgYes">นำเข้าบัญชีของฉัน</button><button class="small" id="mgNo">ไม่ต้อง</button>`;
+  box.classList.remove('hidden');
+  $('#mgYes').onclick = async () => {
+    try {
+      await api('POST', '/api/quizzes', { quizzes: old.map(x => ({ title: x.title, questions: x.questions })) });
+      localStorage.setItem('ql_migrated_' + ME.id, '1'); box.classList.add('hidden'); renderLib();
+      alert(`นำเข้า ${old.length} ชุดเรียบร้อย`);
+    } catch (e) { fail(e); }
+  };
+  $('#mgNo').onclick = () => { localStorage.setItem('ql_migrated_' + ME.id, '1'); box.classList.add('hidden'); };
+}
+
+async function renderLib() {
+  try { QZ = (await api('GET', '/api/quizzes')).quizzes; } catch (e) { $('#libList').innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+  const isSuper = ME.role === 'super';
+  $('#libTitle').textContent = isSuper ? 'แบบทดสอบทั้งหมด' : 'แบบทดสอบของฉัน';
+  $('#libList').innerHTML = QZ.length ? QZ.map(q => `
     <div class="card qz">
       <h3>${esc(q.title || 'ไม่มีชื่อ')}</h3>
       <div class="meta">${q.questions.length} คำถาม • แก้ไขล่าสุด ${new Date(q.updated).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })}</div>
+      ${isSuper ? `<div><span class="owner">${q.mine ? 'ของฉัน' : 'โดย ' + esc(q.ownerName)}</span></div>` : ''}
       <div class="row">
         <button class="go" data-a="play" data-id="${q.id}">▶ เริ่มเกม</button>
         <button data-a="edit" data-id="${q.id}">แก้ไข</button>
@@ -199,29 +350,31 @@ function renderLib() {
         <button data-a="exp" data-id="${q.id}" class="small">ส่งออก</button>
         <button data-a="del" data-id="${q.id}" class="small danger">ลบ</button>
       </div>
-    </div>`).join('') : '<div class="empty">ยังไม่มีแบบทดสอบ กด “สร้างแบบทดสอบใหม่” เพื่อเริ่ม</div>';
+    </div>`).join('') : `<div class="empty">ยังไม่มีแบบทดสอบ กด “สร้างแบบทดสอบใหม่” เพื่อเริ่ม<br><br><button class="small" id="btnSample">หรือ เพิ่มแบบทดสอบตัวอย่าง</button></div>`;
+  const sb = $('#btnSample'); if (sb) sb.onclick = () => api('POST', '/api/quizzes', SAMPLE).then(renderLib).catch(fail);
 }
-$('#libList').onclick = e => {
-  const b = e.target.closest('button'); if (!b) return;
-  const list = loadQuizzes(), q = list.find(x => x.id === b.dataset.id);
+$('#libList').onclick = async e => {
+  const b = e.target.closest('button[data-a]'); if (!b) return;
+  const q = QZ.find(x => String(x.id) === b.dataset.id);
   if (!q) return;
-  if (b.dataset.a === 'play') openStart(q);
-  if (b.dataset.a === 'edit') openEditor(q);
-  if (b.dataset.a === 'dup') { saveQuizzes([...list, { ...JSON.parse(JSON.stringify(q)), id: uid(), title: q.title + ' (สำเนา)', updated: Date.now() }]); renderLib(); }
-  if (b.dataset.a === 'exp') download(`${q.title || 'quiz'}.json`, JSON.stringify({ title: q.title, questions: q.questions }, null, 2), 'application/json');
-  if (b.dataset.a === 'del' && confirm(`ลบ “${q.title}” ใช่ไหม?`)) { saveQuizzes(list.filter(x => x.id !== q.id)); renderLib(); }
+  try {
+    if (b.dataset.a === 'play') openStart(q);
+    if (b.dataset.a === 'edit') openEditor(q);
+    if (b.dataset.a === 'dup') { await api('POST', '/api/quizzes', { title: q.title + ' (สำเนา)', questions: q.questions }); renderLib(); }
+    if (b.dataset.a === 'exp') download(`${q.title || 'quiz'}.json`, JSON.stringify({ title: q.title, questions: q.questions }, null, 2), 'application/json');
+    if (b.dataset.a === 'del' && confirm(`ลบ “${q.title}” ใช่ไหม? (ลบแล้วกู้คืนไม่ได้)`)) { await api('DELETE', '/api/quizzes/' + q.id); renderLib(); }
+  } catch (ex) { fail(ex); }
 };
-$('#btnNew').onclick = () => openEditor({ id: uid(), title: '', questions: [newQ()], updated: Date.now() });
+$('#btnNew').onclick = () => openEditor({ id: null, title: '', questions: [newQ()] });
 $('#btnImportFile').onclick = () => $('#fileIn').click();
 $('#fileIn').onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
   try {
     const d = JSON.parse(await f.text());
-    const arr = Array.isArray(d) ? d : [d];
-    const list = loadQuizzes();
-    arr.forEach(x => { if (Array.isArray(x.questions)) list.push({ id: uid(), title: x.title || f.name.replace(/\.json$/, ''), questions: x.questions, updated: Date.now() }); });
-    saveQuizzes(list); renderLib();
-  } catch { alert('ไฟล์ไม่ถูกต้อง'); }
+    const arr = (Array.isArray(d) ? d : [d]).filter(x => Array.isArray(x.questions)).map(x => ({ title: x.title || f.name.replace(/\.json$/, ''), questions: x.questions }));
+    if (!arr.length) throw new Error('ไฟล์ไม่ถูกต้อง');
+    await api('POST', '/api/quizzes', { quizzes: arr }); renderLib(); alert(`นำเข้า ${arr.length} ชุดเรียบร้อย`);
+  } catch (ex) { alert(ex.message === 'ไฟล์ไม่ถูกต้อง' ? ex.message : 'นำเข้าไม่สำเร็จ: ' + ex.message); }
   e.target.value = '';
 };
 function download(name, content, type) {
@@ -233,7 +386,13 @@ function download(name, content, type) {
 
 /* ---------------- ตัวแก้ไข ---------------- */
 let editing = null;
-function view(id) { ['vLib', 'vEdit', 'vGame'].forEach(v => $('#' + v).classList.toggle('hidden', v !== id)); }
+let confettiOn = false;
+function view(id) {
+  if (id !== 'vGame') { confettiOn = false; $('#confetti').classList.add('hidden'); }
+  ['vLib', 'vEdit', 'vGame', 'vHist', 'vUsers'].forEach(v => $('#' + v).classList.toggle('hidden', v !== id));
+  $('#nav').classList.toggle('hidden', id === 'vEdit' || id === 'vGame');
+  document.querySelectorAll('#nav .tab').forEach(t => t.classList.toggle('on', t.dataset.v === id));
+}
 function openEditor(q) { editing = JSON.parse(JSON.stringify(q)); $('#edTitle').value = editing.title; renderEditor(); view('vEdit'); window.scrollTo(0, 0); }
 
 function renderEditor() {
@@ -308,13 +467,17 @@ function pickImage(i) {
 }
 $('#btnAddQ').onclick = () => { editing.questions.push(newQ()); renderEditor(); window.scrollTo(0, document.body.scrollHeight); };
 $('#btnAddTF').onclick = () => { editing.questions.push(newQ(true)); renderEditor(); window.scrollTo(0, document.body.scrollHeight); };
-$('#btnCancel').onclick = () => { if (confirm('กลับไปหน้าคลังแบบทดสอบ? (การแก้ไขที่ยังไม่บันทึกจะหายไป)')) { view('vLib'); renderLib(); } };
-$('#btnSave').onclick = $('#btnSave2').onclick = () => {
+$('#btnCancel').onclick = () => { if (confirm('กลับไปหน้าคลังแบบทดสอบ? (การแก้ไขที่ยังไม่บันทึกจะหายไป)')) go('vLib'); };
+$('#btnSave').onclick = $('#btnSave2').onclick = async () => {
   editing.title = $('#edTitle').value.trim() || 'แบบทดสอบไม่มีชื่อ';
-  editing.updated = Date.now();
-  const list = loadQuizzes(), k = list.findIndex(x => x.id === editing.id);
-  if (k >= 0) list[k] = editing; else list.push(editing);
-  if (saveQuizzes(list)) { view('vLib'); renderLib(); }
+  const body = { title: editing.title, questions: editing.questions };
+  const btns = [$('#btnSave'), $('#btnSave2')]; btns.forEach(b => { b.disabled = true; b.textContent = 'กำลังบันทึก…'; });
+  try {
+    if (editing.id) await api('PUT', '/api/quizzes/' + editing.id, body);
+    else editing.id = (await api('POST', '/api/quizzes', body)).id;
+    go('vLib');
+  } catch (e) { alert('บันทึกไม่สำเร็จ: ' + e.message); }
+  btns.forEach(b => { b.disabled = false; b.textContent = 'บันทึก'; });
 };
 $('#edTitle').oninput = e => editing.title = e.target.value;
 
@@ -344,7 +507,8 @@ $('#stCancel').onclick = () => $('#dlgStart').close();
 $('#stOk').onclick = () => {
   $('#dlgStart').close();
   podiumShown = false; allOpen = false; seenChips.clear(); lastScreen = '';
-  socket.emit('host:create', { quiz: startQuiz, showOnDevice: $('#stDevice').checked }, res => {
+  socket.emit('host:create', { quizId: startQuiz.id, showOnDevice: $('#stDevice').checked }, res => {
+    if (res.auth) return location.replace('/login.html');
     if (!res.ok) return alert(res.error);
     sessionStorage.setItem('ql_host', JSON.stringify({ pin: res.pin, hostToken: res.hostToken }));
     view('vGame');
@@ -361,12 +525,13 @@ socket.on('connect', () => {
     if (res.ok) return view('vGame');
     sessionStorage.removeItem('ql_host');
     if (!$('#vGame').classList.contains('hidden')) {
-      G = null; view('vLib'); renderLib();
+      G = null; go('vLib');
       alert('ห้องเกมเดิมหมดอายุแล้ว (เซิร์ฟเวอร์เพิ่งรีสตาร์ต หรืออัปเดตระบบ)\nกรุณากด “เริ่มเกม” เพื่อสร้างห้องใหม่ — QR/PIN เดิมใช้ไม่ได้แล้ว');
     }
   });
-  else if (!$('#vGame').classList.contains('hidden') && G) { G = null; view('vLib'); renderLib(); alert('การเชื่อมต่อหลุดและห้องเกมเดิมใช้ไม่ได้แล้ว กรุณาสร้างห้องใหม่'); }
+  else if (!$('#vGame').classList.contains('hidden') && G) { G = null; go('vLib'); alert('การเชื่อมต่อหลุดและห้องเกมเดิมใช้ไม่ได้แล้ว กรุณาสร้างห้องใหม่'); }
 });
+socket.on('host:saved', d => { if (G) G.saved = d.ok; const el = $('#gSaved'); if (el) el.textContent = d.ok ? '✓ บันทึกผลไว้ในเมนู “ประวัติผล” แล้ว' : '⚠️ บันทึกผลไม่สำเร็จ — กรุณาดาวน์โหลด CSV เก็บไว้'; });
 socket.on('host:state', s => { G = s; syncClock(s.now); renderGame(); });
 socket.on('host:answered', d => { if (G) { G.answered = d.answered; const el = $('#gAns'); if (el) el.textContent = d.answered; } });
 
@@ -381,7 +546,7 @@ $('#gFull').onclick = () => document.fullscreenElement ? document.exitFullscreen
 $('#gEnd').onclick = () => {
   if (!G) return;
   if (G.state === 'ended') {
-    if (confirm('ปิดห้องเกมและกลับสู่คลังแบบทดสอบ? (ดาวน์โหลดผลก่อนถ้าต้องการ)')) { socket.emit('host:close'); sessionStorage.removeItem('ql_host'); G = null; view('vLib'); renderLib(); }
+    if (confirm('ปิดห้องเกมและกลับสู่คลังแบบทดสอบ? (ดาวน์โหลดผลก่อนถ้าต้องการ)')) { socket.emit('host:close'); sessionStorage.removeItem('ql_host'); G = null; go('vLib'); }
   } else if (confirm('จบเกมตอนนี้และไปหน้าสรุปอันดับ?')) socket.emit('host:end');
 };
 
@@ -486,6 +651,7 @@ function renderEnded(m, fresh) {
       <button id="gShowAll" class="primary">ดูอันดับทั้งหมด (${r.length} คน)</button>
       <button id="gCsv" class="go">⬇ ดาวน์โหลดผล (Excel/CSV)</button>
     </div>
+    <div id="gSaved" style="opacity:.85">${G.saved ? '✓ บันทึกผลไว้ในเมนู “ประวัติผล” แล้ว' : 'กำลังบันทึกผล…'}</div>
     <div class="card ${allOpen ? '' : 'hidden'}" id="gAll" style="width:min(1100px,96vw)">
       <div class="tabs"><button data-t="rank" class="${endTab === 'rank' ? 'on' : ''}">อันดับผู้เล่น</button><button data-t="q" class="${endTab === 'q' ? 'on' : ''}">สรุปรายข้อ</button></div>
       <div class="scroll" id="gTable"></div>
@@ -496,22 +662,22 @@ function renderEnded(m, fresh) {
     setTimeout(confetti, 2600);
   }
   $('#gShowAll').onclick = () => { allOpen = !allOpen; $('#gAll').classList.toggle('hidden', !allOpen); $('#gAll').scrollIntoView({ behavior: 'smooth' }); };
-  $('#gCsv').onclick = exportCsv;
-  m.querySelector('.tabs').onclick = e => { const b = e.target.closest('button'); if (!b) return; endTab = b.dataset.t; m.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b)); drawTable(); };
-  drawTable();
+  $('#gCsv').onclick = () => exportCsv(G.report, G.title);
+  m.querySelector('.tabs').onclick = e => { const b = e.target.closest('button'); if (!b) return; endTab = b.dataset.t; m.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b)); drawTable($('#gTable'), G.report, endTab); };
+  drawTable($('#gTable'), G.report, endTab);
 }
-function drawTable() {
-  const rep = G.report;
-  if (endTab === 'rank') {
-    $('#gTable').innerHTML = `<table class="res"><tr><th>อันดับ</th><th>ชื่อ</th><th class="num">คะแนน</th><th class="num">ตอบถูก</th></tr>
-      ${G.ranking.map(p => `<tr><td>${p.rank <= 3 ? ['🥇', '🥈', '🥉'][p.rank - 1] : p.rank}</td><td>${esc(p.name)}</td><td class="num">${fmt(p.score)}</td><td class="num">${p.correct}/${G.total}</td></tr>`).join('')}</table>`;
+function drawTable(el, rep, tab) {
+  const n = rep.players.length, total = rep.questions.length;
+  if (tab === 'rank') {
+    el.innerHTML = `<table class="res"><tr><th>อันดับ</th><th>ชื่อ</th><th class="num">คะแนน</th><th class="num">ตอบถูก</th></tr>
+      ${rep.players.map(p => `<tr><td>${p.rank <= 3 ? ['🥇', '🥈', '🥉'][p.rank - 1] : p.rank}</td><td>${esc(p.name)}</td><td class="num">${fmt(p.score)}</td><td class="num">${p.correct}/${total}</td></tr>`).join('')}</table>`;
   } else {
-    $('#gTable').innerHTML = `<table class="res"><tr><th>ข้อ</th><th>คำถาม</th><th class="num">ตอบ</th><th class="num">ถูก</th><th style="width:200px">% ถูก (จากผู้เล่นทั้งหมด)</th></tr>
-      ${rep.questions.map((q, i) => { const p = G.players.length ? Math.round(q.correct / G.players.length * 100) : 0; return `<tr><td>${i + 1}</td><td>${esc(q.text)}</td><td class="num">${q.answered}</td><td class="num">${q.correct}</td><td><span class="pbar" style="width:${p * 1.4}px;background:${p < 50 ? 'var(--bad)' : 'var(--ok)'}"></span> ${p}%</td></tr>`; }).join('')}</table>`;
+    el.innerHTML = `<table class="res"><tr><th>ข้อ</th><th>คำถาม</th><th class="num">ตอบ</th><th class="num">ถูก</th><th style="width:200px">% ถูก (จากผู้เล่นทั้งหมด)</th></tr>
+      ${rep.questions.map((q, i) => { const p = n ? Math.round(q.correct / n * 100) : 0; return `<tr><td>${i + 1}</td><td>${esc(q.text)}</td><td class="num">${q.answered}</td><td class="num">${q.correct}</td><td><span class="pbar" style="width:${p * 1.4}px;background:${p < 50 ? 'var(--bad)' : 'var(--ok)'}"></span> ${p}%</td></tr>`; }).join('')}</table>`;
   }
 }
-function exportCsv() {
-  const rep = G.report, qn = rep.questions.length;
+function exportCsv(rep, title, when) {
+  const n = rep.players.length, qn = rep.questions.length, d = when ? new Date(when) : new Date();
   const cell = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const head = ['อันดับ', 'ชื่อ', 'คะแนนรวม', 'ตอบถูก (ข้อ)', ...rep.questions.map((_, i) => `ข้อ ${i + 1}`), ...rep.questions.map((_, i) => `คะแนนข้อ ${i + 1}`)];
   const L = 'ABCD';
@@ -519,25 +685,127 @@ function exportCsv() {
     ...p.answers.map(a => a ? `${L[a.choice]} ${a.correct ? '✔' : '✘'} (${(a.ms / 1000).toFixed(1)}s)` : '-'),
     ...p.answers.map(a => a ? a.points : 0)]);
   const qrows = [[], ['สรุปรายข้อ'], ['ข้อ', 'คำถาม', 'จำนวนตอบ', 'ตอบถูก', '% ถูก'],
-    ...rep.questions.map((q, i) => [i + 1, q.text, q.answered, q.correct, G.players.length ? Math.round(q.correct / G.players.length * 100) + '%' : '0%'])];
-  const csv = '﻿' + [[`แบบทดสอบ: ${G.title}`, `วันที่: ${new Date().toLocaleString('th-TH')}`, `ผู้เล่น: ${G.players.length} คน`, `จำนวนข้อ: ${qn}`], [], head, ...rows, ...qrows].map(r => r.map(cell).join(',')).join('\r\n');
-  download(`ผลคะแนน_${G.title}_${new Date().toISOString().slice(0, 10)}.csv`, csv, 'text/csv;charset=utf-8');
+    ...rep.questions.map((q, i) => [i + 1, q.text, q.answered, q.correct, n ? Math.round(q.correct / n * 100) + '%' : '0%'])];
+  const csv = '﻿' + [[`แบบทดสอบ: ${title}`, `วันที่: ${d.toLocaleString('th-TH')}`, `ผู้เล่น: ${n} คน`, `จำนวนข้อ: ${qn}`], [], head, ...rows, ...qrows].map(r => r.map(cell).join(',')).join('\r\n');
+  download(`ผลคะแนน_${title}_${d.toISOString().slice(0, 10)}.csv`, csv, 'text/csv;charset=utf-8');
 }
+
+/* ---------------- ประวัติผล ---------------- */
+const dt = t => new Date(t).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' });
+async function renderHist() {
+  $('#histList').classList.remove('hidden'); $('#histDetail').classList.add('hidden');
+  $('#histTable').innerHTML = '<div class="empty">กำลังโหลด…</div>';
+  let games;
+  try { games = (await api('GET', '/api/games')).games; } catch (e) { $('#histTable').innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+  const sup = ME.role === 'super';
+  $('#histTable').innerHTML = games.length ? `<table class="list"><tr><th>วันที่เล่น</th><th>แบบทดสอบ</th>${sup ? '<th>ผู้จัด</th>' : ''}<th>ผู้เล่น</th><th>จำนวนข้อ</th><th></th></tr>
+    ${games.map(g => `<tr><td>${dt(g.playedAt)}</td><td>${esc(g.title)}</td>${sup ? `<td>${esc(g.ownerName)}</td>` : ''}<td>${g.players} คน</td><td>${g.questions}</td>
+      <td><div class="acts"><button class="small primary" data-a="view" data-id="${g.id}">ดูผล</button><button class="small danger" data-a="del" data-id="${g.id}">ลบ</button></div></td></tr>`).join('')}</table>`
+    : '<div class="empty">ยังไม่มีประวัติ — ผลจะถูกบันทึกอัตโนมัติเมื่อจบเกม</div>';
+}
+$('#histTable').onclick = async e => {
+  const b = e.target.closest('button[data-a]'); if (!b) return;
+  try {
+    if (b.dataset.a === 'del') { if (confirm('ลบประวัติผลเกมนี้? (กู้คืนไม่ได้)')) { await api('DELETE', '/api/games/' + b.dataset.id); renderHist(); } return; }
+    const g = await api('GET', '/api/games/' + b.dataset.id);
+    let tab = 'rank';
+    const el = $('#histDetail');
+    el.innerHTML = `<div class="toolbar"><button class="ghost" id="hBack">← กลับ</button><h2>${esc(g.title)}</h2><button class="go" id="hCsv">⬇ ดาวน์โหลดผล (Excel/CSV)</button></div>
+      <p style="opacity:.85;margin-top:-6px">เล่นเมื่อ ${dt(g.playedAt)} • ผู้เล่น ${g.report.players.length} คน • ${g.report.questions.length} ข้อ</p>
+      <div class="card"><div class="tabs"><button data-t="rank" class="on">อันดับผู้เล่น</button><button data-t="q">สรุปรายข้อ</button></div><div class="scroll" id="hTable"></div></div>`;
+    $('#histList').classList.add('hidden'); el.classList.remove('hidden');
+    drawTable($('#hTable'), g.report, tab);
+    $('#hBack').onclick = renderHist;
+    $('#hCsv').onclick = () => exportCsv(g.report, g.title, g.playedAt);
+    el.querySelector('.tabs').onclick = ev => { const t = ev.target.closest('button'); if (!t) return; tab = t.dataset.t; el.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === t)); drawTable($('#hTable'), g.report, tab); };
+  } catch (ex) { fail(ex); }
+};
+
+/* ---------------- จัดการผู้ใช้ (Super Admin) ---------------- */
+let USERS = [], editUser = null;
+async function renderUsers() {
+  $('#userTable').innerHTML = '<div class="empty">กำลังโหลด…</div>';
+  try { USERS = (await api('GET', '/api/users')).users; } catch (e) { $('#userTable').innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+  $('#userTable').innerHTML = `<table class="list"><tr><th>ชื่อผู้ใช้</th><th>ชื่อที่แสดง</th><th>สิทธิ์</th><th>สถานะ</th><th>เข้าใช้ล่าสุด</th><th>แบบทดสอบ / เกม</th><th></th></tr>
+    ${USERS.map(u => { const me = u.id === ME.id; return `<tr class="${u.active ? '' : 'off'}"><td><b>${esc(u.username)}</b>${me ? ' (คุณ)' : ''}</td><td>${esc(u.displayName)}</td>
+      <td>${u.role === 'super' ? '<span class="pill sup">Super Admin</span>' : 'ผู้จัด'}</td>
+      <td>${u.active ? '<span class="pill ok">ใช้งาน</span>' : '<span class="pill no">ระงับ</span>'}${u.mustChange ? '<br><small style="color:var(--muted)">รอเปลี่ยนรหัส</small>' : ''}</td>
+      <td>${u.lastLogin ? dt(u.lastLogin) : '-'}</td><td>${u.quizCount} / ${u.gameCount}</td>
+      <td><div class="acts"><button class="small" data-a="edit" data-id="${u.id}">แก้ไข</button>
+        <button class="small" data-a="reset" data-id="${u.id}">รีเซ็ตรหัส</button>
+        ${me ? '' : `<button class="small" data-a="toggle" data-id="${u.id}">${u.active ? 'ระงับ' : 'เปิดใช้'}</button><button class="small danger" data-a="del" data-id="${u.id}">ลบ</button>`}</div></td></tr>`; }).join('')}</table>`;
+}
+const genPw = () => { const c = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'; const a = new Uint32Array(10); crypto.getRandomValues(a); return [...a].map(x => c[x % c.length]).join(''); };
+function showCred(u, pw) {
+  $('#credText').textContent = `ลิงก์เข้าสู่ระบบ: ${location.origin}/login.html\nชื่อผู้ใช้: ${u}\nรหัสผ่านชั่วคราว: ${pw}`;
+  $('#dlgCred').showModal();
+}
+$('#credCopy').onclick = () => navigator.clipboard?.writeText($('#credText').textContent).then(() => { $('#credCopy').textContent = 'คัดลอกแล้ว ✓'; setTimeout(() => $('#credCopy').textContent = 'คัดลอก', 1500); });
+$('#credClose').onclick = () => $('#dlgCred').close();
+function openUser(u) {
+  editUser = u;
+  $('#uTitle').textContent = u ? 'แก้ไขผู้ใช้' : 'เพิ่มผู้ใช้';
+  $('#uName').value = u ? u.username : ''; $('#uName').disabled = !!u;
+  $('#uDisp').value = u ? u.displayName : '';
+  $('#uRole').value = u ? u.role : 'organizer'; $('#uRole').disabled = !!(u && u.id === ME.id);
+  $('#uPw').value = u ? '' : genPw();
+  $('#uPw').parentElement.classList.toggle('hidden', !!u); $('#uPwLbl').classList.toggle('hidden', !!u);
+  $('#uErr').textContent = '';
+  $('#dlgUser').showModal();
+}
+$('#btnAddUser').onclick = () => openUser(null);
+$('#uGen').onclick = () => $('#uPw').value = genPw();
+$('#uCancel').onclick = () => $('#dlgUser').close();
+$('#uForm').onsubmit = async e => {
+  e.preventDefault();
+  try {
+    if (editUser) await api('PATCH', '/api/users/' + editUser.id, { displayName: $('#uDisp').value, ...(editUser.id === ME.id ? {} : { role: $('#uRole').value }) });
+    else {
+      await api('POST', '/api/users', { username: $('#uName').value, displayName: $('#uDisp').value, role: $('#uRole').value, password: $('#uPw').value });
+      showCred($('#uName').value.trim().toLowerCase(), $('#uPw').value);
+    }
+    $('#dlgUser').close(); renderUsers();
+  } catch (ex) { $('#uErr').textContent = ex.message; }
+};
+$('#userTable').onclick = async e => {
+  const b = e.target.closest('button[data-a]'); if (!b) return;
+  const u = USERS.find(x => String(x.id) === b.dataset.id); if (!u) return;
+  try {
+    if (b.dataset.a === 'edit') return openUser(u);
+    if (b.dataset.a === 'reset') {
+      if (!confirm(`รีเซ็ตรหัสผ่านของ “${u.displayName}”? ระบบจะออกรหัสชั่วคราวใหม่ และให้ผู้ใช้ตั้งรหัสเองตอนเข้าครั้งถัดไป`)) return;
+      const pw = genPw(); await api('PATCH', '/api/users/' + u.id, { password: pw });
+      if (u.id === ME.id) { alert('รีเซ็ตรหัสของตัวเองแล้ว กรุณาเข้าสู่ระบบใหม่'); return location.replace('/login.html'); }
+      showCred(u.username, pw);
+    }
+    if (b.dataset.a === 'toggle') {
+      if (u.active && !confirm(`ระงับบัญชี “${u.displayName}”? ผู้ใช้จะออกจากระบบทันทีและเข้าใช้ไม่ได้จนกว่าจะเปิดใหม่`)) return;
+      await api('PATCH', '/api/users/' + u.id, { active: !u.active });
+    }
+    if (b.dataset.a === 'del') {
+      if (!confirm(`ลบบัญชี “${u.displayName}” ถาวร?\nแบบทดสอบ ${u.quizCount} ชุด และประวัติ ${u.gameCount} เกม จะโอนมาเป็นของคุณ`)) return;
+      await api('DELETE', '/api/users/' + u.id);
+    }
+    renderUsers();
+  } catch (ex) { fail(ex); }
+};
 
 function confetti() {
   const c = $('#confetti'), ctx = c.getContext('2d');
-  c.classList.remove('hidden'); c.width = innerWidth; c.height = innerHeight;
+  if ($('#vGame').classList.contains('hidden')) return;
+  confettiOn = true; c.classList.remove('hidden'); c.width = innerWidth; c.height = innerHeight;
   const cols = ['#e21b3c', '#1368ce', '#d89e00', '#26890c', '#ffcc00', '#fff'];
   const ps = Array.from({ length: 220 }, () => ({ x: Math.random() * c.width, y: -20 - Math.random() * c.height, w: 6 + Math.random() * 8, h: 8 + Math.random() * 10, vy: 2 + Math.random() * 4, vx: -1.5 + Math.random() * 3, r: Math.random() * 6, vr: -.2 + Math.random() * .4, c: cols[Math.floor(Math.random() * cols.length)] }));
   let t = 0;
   (function f() {
     ctx.clearRect(0, 0, c.width, c.height);
     ps.forEach(p => { p.x += p.vx; p.y += p.vy; p.r += p.vr; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.fillStyle = p.c; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); ctx.restore(); });
-    if (++t < 360) requestAnimationFrame(f); else c.classList.add('hidden');
+    if (++t < 360 && confettiOn) requestAnimationFrame(f); else { c.classList.add('hidden'); ctx.clearRect(0, 0, c.width, c.height); }
   })();
 }
 
-renderLib();
+view('vLib');
+boot().catch(e => { if (!/เข้าสู่ระบบ/.test(e.message)) alert(e.message); });
 </script>
 </body>
 </html>

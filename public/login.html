@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>QuizLive — เข้าสู่ระบบผู้จัด</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="style.css">
+<style>
+  body{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+  .box{width:min(400px,100%)}
+  .box h1{text-align:center;font-size:2.6em;margin:0 0 6px}
+  .box .tag{text-align:center;opacity:.85;margin-bottom:22px}
+  .card{display:flex;flex-direction:column;gap:12px}
+  .card label{font-size:.9em;color:var(--muted);margin-bottom:-6px}
+  .card input{padding:.7em .8em;border:2px solid #dde;border-radius:10px;font-size:1.05em;outline:none}
+  .card input:focus{border-color:var(--bg2)}
+  .card button{font-size:1.1em;padding:.8em;margin-top:6px}
+  .errbox{background:#ffe3e7;color:#b0102b;border-radius:8px;padding:10px;font-weight:500}
+  .foot{text-align:center;opacity:.7;font-size:.85em;margin-top:18px}
+  .foot a{color:#fff}
+</style>
+</head>
+<body>
+<div class="box">
+  <h1 class="brand">Quiz<b>Live</b></h1>
+  <div class="tag">เข้าสู่ระบบสำหรับผู้จัดกิจกรรม</div>
+  <form class="card" id="f" autocomplete="on">
+    <label for="u">ชื่อผู้ใช้</label>
+    <input id="u" name="username" autocomplete="username" autocapitalize="off" spellcheck="false" required>
+    <label for="p">รหัสผ่าน</label>
+    <input id="p" name="password" type="password" autocomplete="current-password" required>
+    <button class="primary" id="btn" type="submit">เข้าสู่ระบบ</button>
+    <div class="errbox hidden" id="err"></div>
+  </form>
+  <div class="foot">ลืมรหัสผ่าน? ติดต่อผู้ดูแลระบบ (Super Admin) เพื่อรีเซ็ต<br><a href="/">ไปหน้าผู้เล่น (ใส่ PIN)</a></div>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+fetch('/api/me').then(r => r.ok && location.replace('/host.html')).catch(() => {});
+$('#f').onsubmit = async e => {
+  e.preventDefault();
+  $('#err').classList.add('hidden');
+  $('#btn').disabled = true; $('#btn').textContent = 'กำลังเข้าสู่ระบบ…';
+  try {
+    const r = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: $('#u').value, password: $('#p').value }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'เข้าสู่ระบบไม่สำเร็จ');
+    location.replace('/host.html');
+  } catch (ex) {
+    $('#err').textContent = ex.message === 'Failed to fetch' ? 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ลองใหม่อีกครั้ง' : ex.message;
+    $('#err').classList.remove('hidden');
+    $('#btn').disabled = false; $('#btn').textContent = 'เข้าสู่ระบบ';
+  }
+};
+$('#u').focus();
+</script>
+</body>
+</html>

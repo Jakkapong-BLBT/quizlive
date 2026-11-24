@@ -6,6 +6,7 @@ const path = require('path');
 const crypto = require('crypto');
 const QRCode = require('qrcode');
 const { Server } = require('socket.io');
+const db = require('./db');
 
 const PORT = process.env.PORT || 3000;
 const PREVIEW_MS = 3000;          // เวลาแสดงคำถามก่อนเปิดให้ตอบ
@@ -15,10 +16,216 @@ const GAME_TTL_MS = 6 * 3600e3;   // ลบเกมทิ้งหลัง 6 �
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { pingInterval: 10000, pingTimeout: 20000, maxHttpBufferSize: 5e6 });
+app.set('trust proxy', 1);
+app.use(express.json({ limit: '6mb' }));
 
-app.use(express.static(path.join(__dirname, 'public'), {
-  setHeaders: res => res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate'),
+/* ---------- คุกกี้ / ผู้ใช้ปัจจุบัน ---------- */
+const COOKIE = 'ql_sid';
+function readCookie(header, name) {
+  const m = String(header || '').split(/;\s*/).find(c => c.startsWith(name + '='));
+  return m ? decodeURIComponent(m.slice(name.length + 1)) : '';
+}
+function setSessionCookie(req, res, tok) {
+  const secure = req.secure || req.headers['x-forwarded-proto'] === 'https';
+  res.setHeader('Set-Cookie', `${COOKIE}=${tok}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${7 * 24 * 3600}${secure ? '; Secure' : ''}`);
+}
+const clearCookie = res => res.setHeader('Set-Cookie', `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+async function currentUser(req) {
+  if (req._user !== undefined) return req._user;
+  req._user = await db.userFromToken(readCookie(req.headers.cookie, COOKIE)).catch(() => null);
+  return req._user;
+}
+const wrap = fn => (req, res, next) => fn(req, res, next).catch(e => { console.error(e); res.status(500).json({ error: 'เกิดข้อผิดพลาดในระบบ ลองใหม่อีกครั้ง' }); });
+const needAuth = (superOnly = false) => wrap(async (req, res, next) => {
+  const u = await currentUser(req);
+  if (!u) return res.status(401).json({ error: 'กรุณาเข้าสู่ระบบ' });
+  if (superOnly && u.role !== 'super') return res.status(403).json({ error: 'เฉพาะ Super Admin' });
+  if (u.must_change && !['/api/me', '/api/change-password', '/api/logout'].includes(req.path)) return res.status(403).json({ error: 'กรุณาเปลี่ยนรหัสผ่านก่อนใช้งาน', mustChange: true });
+  next();
+});
+// ป้องกันการส่งฟอร์มข้ามเว็บ: คำสั่งที่เปลี่ยนข้อมูลต้องเป็น JSON เท่านั้น
+app.use('/api', (req, res, next) => {
+  if (!['GET', 'HEAD'].includes(req.method) && !req.is('application/json')) return res.status(415).json({ error: 'รูปแบบคำขอไม่ถูกต้อง' });
+  next();
+});
+const pub = u => ({ id: u.id, username: u.username, displayName: u.display_name, role: u.role, active: u.active, mustChange: u.must_change, lastLogin: u.last_login ? Number(u.last_login) : null, createdAt: u.created_at ? Number(u.created_at) : null });
+const validUsername = s => /^[a-z0-9._-]{3,30}$/.test(s);
+const validPassword = s => typeof s === 'string' && s.length >= 8 && s.length <= 100;
+
+/* ---------- กันเดารหัส: ผิด 5 ครั้ง ล็อก 5 นาที ---------- */
+const fails = new Map();
+function lockedFor(key) { const f = fails.get(key); return f && f.until > Date.now() ? Math.ceil((f.until - Date.now()) / 60000) : 0; }
+function addFail(key) {
+  const f = fails.get(key) || { n: 0, until: 0 };
+  f.n++; if (f.n >= 5) { f.until = Date.now() + 5 * 60e3; f.n = 0; }
+  fails.set(key, f);
+}
+
+/* ---------- เข้าสู่ระบบ ---------- */
+app.post('/api/login', wrap(async (req, res) => {
+  const username = String(req.body.username || '').trim().toLowerCase();
+  const password = String(req.body.password || '');
+  const key = username + '|' + req.ip;
+  const lock = lockedFor(key);
+  if (lock) return res.status(429).json({ error: `ใส่รหัสผิดหลายครั้ง กรุณารอ ${lock} นาที` });
+  const rows = await db.q(`SELECT * FROM users WHERE username = $1`, [username]);
+  const u = rows[0];
+  const ok = u ? await db.verifyPassword(password, u.password_hash) : (await db.verifyPassword(password, 'scrypt$00$00'), false);
+  if (!u || !ok) { addFail(key); return res.status(401).json({ error: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' }); }
+  if (!u.active) return res.status(403).json({ error: 'บัญชีนี้ถูกระงับ กรุณาติดต่อผู้ดูแลระบบ' });
+  fails.delete(key);
+  await db.q(`UPDATE users SET last_login = $1 WHERE id = $2`, [Date.now(), u.id]);
+  setSessionCookie(req, res, await db.createSession(u.id));
+  res.json({ ok: true, user: pub(u) });
 }));
+app.post('/api/logout', wrap(async (req, res) => {
+  const tok = readCookie(req.headers.cookie, COOKIE);
+  if (tok) await db.deleteSession(tok);
+  clearCookie(res); res.json({ ok: true });
+}));
+app.get('/api/me', wrap(async (req, res) => {
+  const u = await currentUser(req);
+  if (!u) return res.status(401).json({ error: 'กรุณาเข้าสู่ระบบ' });
+  res.json({ user: pub(u), persistent: db.persistent() });
+}));
+app.post('/api/change-password', needAuth(), wrap(async (req, res) => {
+  const u = req._user;
+  const { current, next: nw } = req.body;
+  const row = (await db.q(`SELECT password_hash FROM users WHERE id = $1`, [u.id]))[0];
+  if (!(await db.verifyPassword(String(current || ''), row.password_hash))) return res.status(400).json({ error: 'รหัสผ่านปัจจุบันไม่ถูกต้อง' });
+  if (!validPassword(nw)) return res.status(400).json({ error: 'รหัสผ่านใหม่ต้องยาวอย่างน้อย 8 ตัวอักษร' });
+  if (nw === current) return res.status(400).json({ error: 'รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสเดิม' });
+  await db.q(`UPDATE users SET password_hash = $1, must_change = false WHERE id = $2`, [await db.hashPassword(nw), u.id]);
+  await db.deleteUserSessions(u.id, readCookie(req.headers.cookie, COOKIE));
+  res.json({ ok: true });
+}));
+
+/* ---------- จัดการผู้ใช้ (Super Admin) ---------- */
+app.get('/api/users', needAuth(true), wrap(async (req, res) => {
+  const users = await db.q(`SELECT * FROM users ORDER BY id`);
+  const quizzes = await db.q(`SELECT owner_id FROM quizzes`);
+  const games = await db.q(`SELECT owner_id FROM games`);
+  const count = (arr, id) => arr.filter(x => x.owner_id === id).length;
+  res.json({ users: users.map(u => ({ ...pub(u), quizCount: count(quizzes, u.id), gameCount: count(games, u.id) })) });
+}));
+app.post('/api/users', needAuth(true), wrap(async (req, res) => {
+  const username = String(req.body.username || '').trim().toLowerCase();
+  const displayName = String(req.body.displayName || '').trim().slice(0, 60);
+  const password = String(req.body.password || '');
+  const role = req.body.role === 'super' ? 'super' : 'organizer';
+  if (!validUsername(username)) return res.status(400).json({ error: 'ชื่อผู้ใช้ต้องเป็น a-z, 0-9, จุด, ขีด ยาว 3–30 ตัว (ภาษาอังกฤษ)' });
+  if (!displayName) return res.status(400).json({ error: 'กรุณาใส่ชื่อที่แสดง' });
+  if (!validPassword(password)) return res.status(400).json({ error: 'รหัสผ่านชั่วคราวต้องยาวอย่างน้อย 8 ตัวอักษร' });
+  if ((await db.q(`SELECT id FROM users WHERE username = $1`, [username])).length) return res.status(400).json({ error: 'ชื่อผู้ใช้นี้มีอยู่แล้ว' });
+  await db.q(`INSERT INTO users (username, display_name, password_hash, role, active, must_change, created_at) VALUES ($1, $2, $3, $4, true, true, $5)`,
+    [username, displayName, await db.hashPassword(password), role, Date.now()]);
+  res.json({ ok: true });
+}));
+app.patch('/api/users/:id', needAuth(true), wrap(async (req, res) => {
+  const id = Number(req.params.id), me = req._user;
+  const u = (await db.q(`SELECT * FROM users WHERE id = $1`, [id]))[0];
+  if (!u) return res.status(404).json({ error: 'ไม่พบผู้ใช้' });
+  const b = req.body;
+  if (id === me.id && (b.active === false || b.role === 'organizer')) return res.status(400).json({ error: 'ไม่สามารถระงับหรือลดสิทธิ์บัญชีของตัวเองได้' });
+  if (b.displayName !== undefined) {
+    const dn = String(b.displayName).trim().slice(0, 60);
+    if (!dn) return res.status(400).json({ error: 'กรุณาใส่ชื่อที่แสดง' });
+    await db.q(`UPDATE users SET display_name = $1 WHERE id = $2`, [dn, id]);
+  }
+  if (b.role !== undefined) await db.q(`UPDATE users SET role = $1 WHERE id = $2`, [b.role === 'super' ? 'super' : 'organizer', id]);
+  if (b.active !== undefined) {
+    await db.q(`UPDATE users SET active = $1 WHERE id = $2`, [!!b.active, id]);
+    if (!b.active) await db.deleteUserSessions(id);
+  }
+  if (b.password !== undefined) {
+    if (!validPassword(b.password)) return res.status(400).json({ error: 'รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร' });
+    await db.q(`UPDATE users SET password_hash = $1, must_change = true WHERE id = $2`, [await db.hashPassword(b.password), id]);
+    await db.deleteUserSessions(id);
+  }
+  res.json({ ok: true });
+}));
+app.delete('/api/users/:id', needAuth(true), wrap(async (req, res) => {
+  const id = Number(req.params.id);
+  if (id === req._user.id) return res.status(400).json({ error: 'ไม่สามารถลบบัญชีของตัวเองได้' });
+  // แบบทดสอบและประวัติเกมของผู้ใช้ที่ถูกลบ จะโอนมาเป็นของ Super Admin ที่ลบ เพื่อไม่ให้ข้อมูลหาย
+  await db.q(`UPDATE quizzes SET owner_id = $1 WHERE owner_id = $2`, [req._user.id, id]);
+  await db.q(`UPDATE games SET owner_id = $1 WHERE owner_id = $2`, [req._user.id, id]);
+  await db.deleteUserSessions(id);
+  await db.q(`DELETE FROM users WHERE id = $1`, [id]);
+  res.json({ ok: true });
+}));
+
+/* ---------- แบบทดสอบ ---------- */
+async function ownersMap() {
+  const m = {}; (await db.q(`SELECT id, display_name FROM users`)).forEach(u => m[u.id] = u.display_name); return m;
+}
+async function quizFor(user, id) {
+  const r = (await db.q(`SELECT * FROM quizzes WHERE id = $1`, [Number(id)]))[0];
+  if (!r || (user.role !== 'super' && r.owner_id !== user.id)) return null;
+  return r;
+}
+app.get('/api/quizzes', needAuth(), wrap(async (req, res) => {
+  const u = req._user;
+  const rows = u.role === 'super' ? await db.q(`SELECT * FROM quizzes ORDER BY updated_at DESC`) : await db.q(`SELECT * FROM quizzes WHERE owner_id = $1 ORDER BY updated_at DESC`, [u.id]);
+  const owners = await ownersMap();
+  res.json({ quizzes: rows.map(r => ({ id: r.id, title: r.title, questions: JSON.parse(r.data), updated: Number(r.updated_at), ownerId: r.owner_id, ownerName: owners[r.owner_id] || '-', mine: r.owner_id === u.id })) });
+}));
+app.post('/api/quizzes', needAuth(), wrap(async (req, res) => {
+  const list = Array.isArray(req.body.quizzes) ? req.body.quizzes : [req.body];
+  const ids = [];
+  for (const item of list.slice(0, 100)) {
+    const title = String(item.title || 'แบบทดสอบไม่มีชื่อ').slice(0, 120);
+    const questions = Array.isArray(item.questions) ? item.questions.slice(0, 100) : [];
+    const now = Date.now();
+    const r = await db.q(`INSERT INTO quizzes (owner_id, title, data, created_at, updated_at) VALUES ($1, $2, $3, $4, $5) RETURNING id`, [req._user.id, title, JSON.stringify(questions), now, now]);
+    ids.push(r[0].id);
+  }
+  res.json({ ok: true, ids, id: ids[0] });
+}));
+app.put('/api/quizzes/:id', needAuth(), wrap(async (req, res) => {
+  const r = await quizFor(req._user, req.params.id);
+  if (!r) return res.status(404).json({ error: 'ไม่พบแบบทดสอบ หรือไม่มีสิทธิ์แก้ไข' });
+  const title = String(req.body.title || 'แบบทดสอบไม่มีชื่อ').slice(0, 120);
+  const questions = Array.isArray(req.body.questions) ? req.body.questions.slice(0, 100) : [];
+  await db.q(`UPDATE quizzes SET title = $1, data = $2, updated_at = $3 WHERE id = $4`, [title, JSON.stringify(questions), Date.now(), r.id]);
+  res.json({ ok: true });
+}));
+app.delete('/api/quizzes/:id', needAuth(), wrap(async (req, res) => {
+  const r = await quizFor(req._user, req.params.id);
+  if (!r) return res.status(404).json({ error: 'ไม่พบแบบทดสอบ หรือไม่มีสิทธิ์ลบ' });
+  await db.q(`DELETE FROM quizzes WHERE id = $1`, [r.id]);
+  res.json({ ok: true });
+}));
+
+/* ---------- ประวัติผลเกม ---------- */
+app.get('/api/games', needAuth(), wrap(async (req, res) => {
+  const u = req._user;
+  const rows = u.role === 'super'
+    ? await db.q(`SELECT id, owner_id, quiz_title, pin, player_count, question_count, played_at FROM games ORDER BY played_at DESC`)
+    : await db.q(`SELECT id, owner_id, quiz_title, pin, player_count, question_count, played_at FROM games WHERE owner_id = $1 ORDER BY played_at DESC`, [u.id]);
+  const owners = await ownersMap();
+  res.json({ games: rows.map(r => ({ id: r.id, title: r.quiz_title, pin: r.pin, players: r.player_count, questions: r.question_count, playedAt: Number(r.played_at), ownerName: owners[r.owner_id] || '-' })) });
+}));
+app.get('/api/games/:id', needAuth(), wrap(async (req, res) => {
+  const r = (await db.q(`SELECT * FROM games WHERE id = $1`, [Number(req.params.id)]))[0];
+  if (!r || (req._user.role !== 'super' && r.owner_id !== req._user.id)) return res.status(404).json({ error: 'ไม่พบข้อมูล' });
+  res.json({ id: r.id, title: r.quiz_title, playedAt: Number(r.played_at), players: r.player_count, report: JSON.parse(r.report) });
+}));
+app.delete('/api/games/:id', needAuth(), wrap(async (req, res) => {
+  const r = (await db.q(`SELECT * FROM games WHERE id = $1`, [Number(req.params.id)]))[0];
+  if (!r || (req._user.role !== 'super' && r.owner_id !== req._user.id)) return res.status(404).json({ error: 'ไม่พบข้อมูล' });
+  await db.q(`DELETE FROM games WHERE id = $1`, [r.id]);
+  res.json({ ok: true });
+}));
+
+/* ---------- หน้าเว็บ: หน้าผู้จัดต้องล็อกอินก่อน ---------- */
+const noCache = res => res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+app.get(['/host', '/host.html'], wrap(async (req, res) => {
+  if (!(await currentUser(req))) return res.redirect('/login.html');
+  noCache(res); res.sendFile(path.join(__dirname, 'public', 'host.html'));
+}));
+app.get(['/login', '/admin'], (req, res) => res.redirect('/login.html'));
+app.use(express.static(path.join(__dirname, 'public'), { setHeaders: noCache }));
 app.get('/qr', async (req, res) => {
   const text = String(req.query.text || '').slice(0, 500);
   if (!text) return res.status(400).end();
@@ -27,7 +234,7 @@ app.get('/qr', async (req, res) => {
     res.type('png').send(png);
   } catch { res.status(500).end(); }
 });
-app.get('/health', (req, res) => res.json({ ok: true, games: games.size }));
+app.get('/health', (req, res) => res.json({ ok: true, games: games.size, db: db.persistent() ? 'postgres' : 'memory' }));
 
 /** @type {Map<string, any>} */
 const games = new Map();
@@ -93,7 +300,7 @@ function hostView(game) {
     base.correctCount = [...game.answers.values()].filter(a => a.correct).length;
   }
   if (['leaderboard', 'reveal', 'ended'].includes(game.state)) base.ranking = ranking(game);
-  if (game.state === 'ended') base.report = report(game);
+  if (game.state === 'ended') { base.report = report(game); base.saved = !!game.saved; }
   return base;
 }
 
@@ -141,7 +348,18 @@ function report(game) {
   };
 }
 
+async function saveGame(game) {
+  if (game.saved || !game.players.size) return;
+  game.saved = true;
+  try {
+    const r = await db.q(`INSERT INTO games (owner_id, quiz_title, pin, player_count, question_count, played_at, report) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+      [game.ownerId, game.quiz.title, game.pin, game.players.size, game.quiz.questions.length, Date.now(), JSON.stringify(report(game))]);
+    game.savedId = r[0].id;
+  } catch (e) { game.saved = false; console.error('บันทึกผลไม่สำเร็จ:', e.message); }
+}
+
 function broadcast(game) {
+  if (game.state === 'ended' && !game.saved) saveGame(game).then(() => { if (game.hostSocket) io.to(game.hostSocket).emit('host:saved', { ok: game.saved, id: game.savedId }); });
   if (game.hostSocket) io.to(game.hostSocket).emit('host:state', hostView(game));
   for (const p of game.players.values()) {
     if (p.connected && p.socketId) io.to(p.socketId).emit('player:state', playerView(game, p));
@@ -198,19 +416,26 @@ function next(game) {
 io.on('connection', socket => {
   let role = null, game = null, player = null;
 
-  socket.on('host:create', (data, ack) => {
-    const quiz = cleanQuiz(data?.quiz);
-    if (!quiz.questions.length) return ack?.({ ok: false, error: 'ยังไม่มีคำถามที่สมบูรณ์ (ต้องมีคำถาม ตัวเลือกอย่างน้อย 2 ข้อ และเฉลย)' });
-    const pin = newPin();
-    game = {
-      pin, hostToken: token(), hostSocket: socket.id, quiz, state: 'lobby', qIndex: -1,
-      players: new Map(), names: new Set(), answers: new Map(), stats: [], locked: false,
-      showOnDevice: data?.showOnDevice !== false, createdAt: Date.now(), timer: null,
-    };
-    games.set(pin, game); role = 'host';
-    socket.join('h:' + pin);
-    ack?.({ ok: true, pin, hostToken: game.hostToken });
-    broadcast(game);
+  socket.on('host:create', async (data, ack) => {
+    try {
+      const user = await db.userFromToken(readCookie(socket.handshake.headers.cookie, COOKIE));
+      if (!user) return ack?.({ ok: false, error: 'หมดเวลาการเข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่', auth: true });
+      if (user.must_change) return ack?.({ ok: false, error: 'กรุณาเปลี่ยนรหัสผ่านก่อนใช้งาน' });
+      const row = (await db.q(`SELECT * FROM quizzes WHERE id = $1`, [Number(data?.quizId)]))[0];
+      if (!row || (user.role !== 'super' && row.owner_id !== user.id)) return ack?.({ ok: false, error: 'ไม่พบแบบทดสอบ' });
+      const quiz = cleanQuiz({ title: row.title, questions: JSON.parse(row.data) });
+      if (!quiz.questions.length) return ack?.({ ok: false, error: 'ยังไม่มีคำถามที่สมบูรณ์ (ต้องมีคำถาม ตัวเลือกอย่างน้อย 2 ข้อ และเฉลย)' });
+      const pin = newPin();
+      game = {
+        pin, hostToken: token(), hostSocket: socket.id, quiz, state: 'lobby', qIndex: -1,
+        players: new Map(), names: new Set(), answers: new Map(), stats: [], locked: false,
+        showOnDevice: data?.showOnDevice !== false, createdAt: Date.now(), timer: null,
+        ownerId: user.id, saved: false,
+      };
+      games.set(pin, game); role = 'host';
+      ack?.({ ok: true, pin, hostToken: game.hostToken });
+      broadcast(game);
+    } catch (e) { console.error(e); ack?.({ ok: false, error: 'เกิดข้อผิดพลาด ลองใหม่อีกครั้ง' }); }
   });
 
   socket.on('host:rejoin', ({ pin, hostToken } = {}, ack) => {
@@ -307,6 +532,10 @@ setInterval(() => {
   for (const [pin, g] of games) if (now - g.createdAt > GAME_TTL_MS) { clearTimers(g); games.delete(pin); }
 }, 10 * 60e3);
 
-server.listen(PORT, () => {
-  console.log(`QuizLive พร้อมใช้งาน → http://localhost:${PORT}/host.html (ผู้จัด)  |  http://localhost:${PORT}/ (ผู้เล่น)`);
-});
+setInterval(() => db.purgeSessions().catch(() => {}), 3600e3);
+
+db.init().then(() => {
+  server.listen(PORT, () => {
+    console.log(`QuizLive พร้อมใช้งาน → http://localhost:${PORT}/login.html (ผู้จัด)  |  http://localhost:${PORT}/ (ผู้เล่น)`);
+  });
+}).catch(e => { console.error('เชื่อมต่อฐานข้อมูลไม่สำเร็จ:', e.message); process.exit(1); });
