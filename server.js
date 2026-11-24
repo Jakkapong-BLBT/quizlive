@@ -60,6 +60,9 @@ function parseExpiry(v) {
   return { ok: true, value: Math.round(n) };
 }
 const validUsername = s => /^[a-z0-9._-]{3,30}$/.test(s);
+// ทำชื่อผู้ใช้ให้สะอาด: ตัวอักษรเต็มความกว้าง → ปกติ, เลขไทย → เลขอารบิก, ตัดช่องว่าง/อักขระล่องหน, ตัวพิมพ์เล็ก
+const normUser = s => String(s || '').normalize('NFKC').replace(/[๐-๙]/g, d => String('๐๑๒๓๔๕๖๗๘๙'.indexOf(d)))
+  .replace(/[\s\u200B-\u200F\u2060\uFEFF\u00AD]/g, '').toLowerCase();
 const validPassword = s => typeof s === 'string' && s.length >= 8 && s.length <= 100;
 
 /* ---------- กันเดารหัส: ผิด 5 ครั้ง ล็อก 5 นาที ---------- */
@@ -73,7 +76,7 @@ function addFail(key) {
 
 /* ---------- เข้าสู่ระบบ ---------- */
 app.post('/api/login', wrap(async (req, res) => {
-  const username = String(req.body.username || '').trim().toLowerCase();
+  const username = normUser(req.body.username);
   const password = String(req.body.password || '');
   const key = username + '|' + req.ip;
   const lock = lockedFor(key);
@@ -120,7 +123,7 @@ app.post('/api/recovery-code', needAuth(), wrap(async (req, res) => {
 }));
 // ลืมรหัสผ่าน: ชื่อผู้ใช้ + รหัสกู้คืน → ตั้งรหัสใหม่เอง (รหัสกู้คืนเดิมถูกใช้แล้ว ระบบออกรหัสใหม่ให้)
 app.post('/api/forgot-password', wrap(async (req, res) => {
-  const username = String(req.body.username || '').trim().toLowerCase();
+  const username = normUser(req.body.username);
   const key = 'rc|' + username + '|' + req.ip;
   const lock = lockedFor(key);
   if (lock) return res.status(429).json({ error: `ลองผิดหลายครั้ง กรุณารอ ${lock} นาที` });
@@ -146,7 +149,7 @@ app.get('/api/users', needAuth(true), wrap(async (req, res) => {
   res.json({ users: users.map(u => ({ ...pub(u), quizCount: count(quizzes, u.id), gameCount: count(games, u.id) })) });
 }));
 app.post('/api/users', needAuth(true), wrap(async (req, res) => {
-  const username = String(req.body.username || '').trim().toLowerCase();
+  const username = normUser(req.body.username);
   const displayName = String(req.body.displayName || '').trim().slice(0, 60);
   const password = String(req.body.password || '');
   const role = req.body.role === 'super' ? 'super' : 'organizer';
