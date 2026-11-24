@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#46178f">
+<title>QuizLive — เข้าร่วมเกม</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  body{display:flex;flex-direction:column;min-height:100dvh}
+  header{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;background:rgba(0,0,0,.18);font-weight:600}
+  header .score{background:#fff;color:var(--ink);border-radius:8px;padding:2px 12px}
+  main{flex:1;display:flex;flex-direction:column;padding:16px}
+  .screen{flex:1}
+  .join{max-width:380px;width:100%;margin:auto}
+  .join h1{font-size:2.4em;margin:0 0 18px}
+  .join .card{display:flex;flex-direction:column;gap:12px}
+  .join button{font-size:1.2em;padding:.8em}
+  .msg{font-size:1.6em;font-weight:700;margin:.3em 0}
+  .sub{opacity:.85;font-size:1.1em}
+  .qtext{background:#fff;color:var(--ink);border-radius:10px;padding:12px 14px;font-weight:600;font-size:1.15em;margin-bottom:12px;text-align:center}
+  .qimg{max-width:100%;max-height:28vh;border-radius:10px;display:block;margin:0 auto 12px}
+  .answer{flex:1;display:flex;flex-direction:column}
+  .answer .tiles{flex:1;grid-auto-rows:1fr}
+  .answer .tile{font-size:1.15em;min-height:90px}
+  .answer .tile.only-shape{justify-content:center}
+  .answer .tile.only-shape .shape{width:3em;height:3em}
+  .topline{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+  .topline .bar{flex:1}
+  .result{border-radius:0}
+  body.ok{background:linear-gradient(160deg,#2fa30f,#1e6b08)}
+  body.bad{background:linear-gradient(160deg,#e8334f,#a50f27)}
+  .badge{font-size:4em;line-height:1}
+  .pts{display:inline-block;background:rgba(0,0,0,.25);border-radius:10px;padding:.3em 1em;font-size:1.5em;font-weight:700;margin:.4em 0}
+  .rankbig{font-size:5em;font-weight:800;line-height:1;color:var(--accent)}
+  .spinner{width:46px;height:46px;border:5px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite;margin:20px auto}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .podium{display:flex;gap:8px;align-items:flex-end;justify-content:center;margin:18px 0}
+  .podium div{background:rgba(255,255,255,.15);border-radius:8px 8px 0 0;width:30%;padding:8px 4px;font-weight:600;overflow:hidden}
+  .podium div b{display:block;font-size:1.6em}
+  .conn{position:fixed;bottom:8px;left:50%;transform:translateX(-50%);background:#000a;padding:4px 12px;border-radius:20px;font-size:.85em}
+</style>
+</head>
+<body>
+<header><span class="brand">Quiz<b>Live</b></span><span id="hName"></span><span class="score hidden" id="hScore">0</span></header>
+<main>
+  <!-- ใส่ PIN -->
+  <section class="screen center" id="sPin">
+    <div class="join">
+      <h1 class="brand">Quiz<b>Live</b></h1>
+      <div class="card">
+        <input class="big" id="pin" inputmode="numeric" maxlength="6" placeholder="Game PIN" autocomplete="off">
+        <button class="primary" id="btnPin">เข้าร่วม</button>
+        <div class="err" id="errPin"></div>
+      </div>
+    </div>
+  </section>
+  <!-- ใส่ชื่อ -->
+  <section class="screen center hidden" id="sName">
+    <div class="join">
+      <div class="sub" id="quizTitle"></div>
+      <h1 style="font-size:1.8em">ใส่ชื่อของคุณ</h1>
+      <div class="card">
+        <input class="big" id="nick" maxlength="20" placeholder="ชื่อเล่น / ชื่อ-สาขา" autocomplete="off">
+        <button class="primary" id="btnName">ตกลง เข้าเกม!</button>
+        <div class="err" id="errName"></div>
+      </div>
+    </div>
+  </section>
+  <!-- ข้อความรอ -->
+  <section class="screen center hidden" id="sWait">
+    <div class="msg" id="waitMsg">เข้าร่วมแล้ว!</div>
+    <div class="sub" id="waitSub">ดูชื่อของคุณบนจอใหญ่ รอผู้จัดเริ่มเกม</div>
+    <div class="spinner"></div>
+  </section>
+  <!-- ตอบคำถาม -->
+  <section class="screen answer hidden" id="sAnswer">
+    <div class="topline"><b id="qNo"></b><div class="bar"><i id="qBar"></i></div><b id="qLeft"></b></div>
+    <img class="qimg hidden" id="qImg" alt="">
+    <div class="qtext hidden" id="qText"></div>
+    <div class="tiles" id="tiles"></div>
+  </section>
+  <!-- ผลลัพธ์ -->
+  <section class="screen center hidden" id="sResult">
+    <div class="badge pop" id="rBadge"></div>
+    <div class="msg" id="rMsg"></div>
+    <div class="pts" id="rPts"></div>
+    <div class="sub" id="rStreak"></div>
+    <div class="sub" id="rCorrect" style="margin-top:8px"></div>
+    <div class="sub" id="rRank" style="margin-top:14px;font-size:1.25em;font-weight:600"></div>
+  </section>
+  <!-- จบเกม -->
+  <section class="screen center hidden" id="sEnd">
+    <div class="sub">อันดับของคุณ</div>
+    <div class="rankbig pop" id="eRank"></div>
+    <div class="sub" id="eOf"></div>
+    <div class="pts" id="eScore"></div>
+    <div class="sub" id="eCorrect"></div>
+    <div class="podium" id="ePodium"></div>
+    <button class="ghost" id="btnAgain">เข้าเกมใหม่</button>
+  </section>
+</main>
+<div class="conn hidden" id="conn">กำลังเชื่อมต่อใหม่…</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="common.js"></script>
+<script>
+const socket = io({ transports: ['websocket', 'polling'] });
+let session = JSON.parse(localStorage.getItem('ql_session') || 'null'); // {pin, playerId}
+let pendingPin = null, state = null, tick = null, myChoice = null;
+
+const screens = ['sPin', 'sName', 'sWait', 'sAnswer', 'sResult', 'sEnd'];
+function show(id) { screens.forEach(s => $('#' + s).classList.toggle('hidden', s !== id)); document.body.className = ''; }
+
+// PIN จาก QR (?pin=123456)
+const qp = new URLSearchParams(location.search).get('pin');
+if (qp) $('#pin').value = qp;
+
+socket.on('connect', () => {
+  $('#conn').classList.add('hidden');
+  if (session) {
+    socket.emit('player:join', { pin: session.pin, playerId: session.playerId }, res => {
+      if (!res.ok || res.needName) { session = null; localStorage.removeItem('ql_session'); show('sPin'); if (qp) joinPin(); }
+    });
+  } else if (qp && !pendingPin) joinPin();
+});
+socket.on('disconnect', () => $('#conn').classList.remove('hidden'));
+
+function joinPin() {
+  const pin = $('#pin').value.replace(/\D/g, '');
+  $('#errPin').textContent = '';
+  if (pin.length !== 6) return ($('#errPin').textContent = 'PIN ต้องเป็นตัวเลข 6 หลัก');
+  socket.emit('player:join', { pin }, res => {
+    if (!res.ok) return ($('#errPin').textContent = res.error);
+    pendingPin = pin; $('#quizTitle').textContent = res.title || '';
+    show('sName'); setTimeout(() => $('#nick').focus(), 50);
+  });
+}
+function joinName() {
+  const name = $('#nick').value.trim();
+  $('#errName').textContent = '';
+  if (!name) return ($('#errName').textContent = 'กรุณาใส่ชื่อ');
+  $('#btnName').disabled = true;
+  socket.emit('player:join', { pin: pendingPin, name }, res => {
+    $('#btnName').disabled = false;
+    if (!res.ok) return ($('#errName').textContent = res.error);
+    session = { pin: pendingPin, playerId: res.playerId };
+    localStorage.setItem('ql_session', JSON.stringify(session));
+  });
+}
+$('#btnPin').onclick = joinPin;
+$('#pin').onkeydown = e => e.key === 'Enter' && joinPin();
+$('#btnName').onclick = joinName;
+$('#nick').onkeydown = e => e.key === 'Enter' && joinName();
+$('#btnAgain').onclick = () => { session = null; localStorage.removeItem('ql_session'); location.href = '/'; };
+
+socket.on('player:kicked', () => { session = null; localStorage.removeItem('ql_session'); show('sPin'); $('#errPin').textContent = 'คุณถูกนำออกจากเกม'; });
+socket.on('player:closed', () => { session = null; localStorage.removeItem('ql_session'); show('sPin'); $('#errPin').textContent = 'ผู้จัดปิดเกมแล้ว'; });
+
+socket.on('player:state', v => {
+  const prevKey = state ? state.state + state.qIndex : '';
+  state = v; syncClock(v.now);
+  $('#hName').textContent = v.name;
+  $('#hScore').textContent = fmt(v.score); $('#hScore').classList.remove('hidden');
+  clearInterval(tick);
+  if (v.state === 'lobby') {
+    show('sWait'); $('#waitMsg').textContent = 'เข้าร่วมแล้ว! 🎉'; $('#waitSub').textContent = 'ดูชื่อของคุณบนจอใหญ่ รอผู้จัดเริ่มเกม';
+  } else if (v.state === 'preview' || v.state === 'question') {
+    if (prevKey !== v.state + v.qIndex && v.state === 'preview') myChoice = null;
+    if (v.answered) {
+      show('sWait'); $('#waitMsg').textContent = 'ส่งคำตอบแล้ว ⏳'; $('#waitSub').textContent = 'รอเพื่อน ๆ ตอบให้ครบ…';
+    } else renderQuestion(v);
+  } else if (v.state === 'reveal' || v.state === 'leaderboard') {
+    renderResult(v);
+  } else if (v.state === 'ended') {
+    renderEnd(v);
+  }
+});
+
+function renderQuestion(v) {
+  show('sAnswer');
+  const q = v.question, open = v.state === 'question';
+  $('#qNo').textContent = `${q.index + 1}/${q.total}`;
+  $('#qText').textContent = q.text; $('#qText').classList.toggle('hidden', !q.text);
+  if (q.image) { $('#qImg').src = q.image; $('#qImg').classList.remove('hidden'); } else $('#qImg').classList.add('hidden');
+  const tiles = $('#tiles');
+  tiles.innerHTML = '';
+  for (let i = 0; i < q.optionCount; i++) {
+    if (!q.nonEmpty[i]) continue;
+    const b = document.createElement('button');
+    b.className = 'tile o' + i + (q.options[i] ? '' : ' only-shape');
+    b.innerHTML = SHAPES[i] + (q.options[i] ? `<span>${esc(q.options[i])}</span>` : '');
+    b.disabled = !open;
+    b.onclick = () => answer(i);
+    tiles.appendChild(b);
+  }
+  if (q.multi && open) $('#qText').textContent = (q.text ? q.text + ' ' : '') + '(มีคำตอบถูกมากกว่า 1 ข้อ เลือก 1 ข้อ)';
+  const upd = () => {
+    const t = serverTime();
+    if (!open) { const s = Math.ceil((v.openAt - t) / 1000); $('#qLeft').textContent = s > 0 ? `เริ่มใน ${s}` : ''; $('#qBar').style.width = '100%'; return; }
+    const left = Math.max(0, v.endAt - t);
+    $('#qLeft').textContent = Math.ceil(left / 1000) + ' วิ';
+    $('#qBar').style.width = (left / (q.time * 10)) + '%';
+  };
+  upd(); tick = setInterval(upd, 200);
+}
+
+function answer(i) {
+  if (myChoice !== null) return;
+  myChoice = i;
+  [...$('#tiles').children].forEach(b => { b.disabled = true; if (!b.classList.contains('o' + i)) b.classList.add('dim'); });
+  if (navigator.vibrate) navigator.vibrate(30);
+  socket.emit('player:answer', i, res => {
+    clearInterval(tick);
+    if (res.ok) { show('sWait'); $('#waitMsg').textContent = 'ส่งคำตอบแล้ว ⏳'; $('#waitSub').textContent = 'เร็วแค่ไหนนะ? รอดูผล…'; }
+    else { show('sWait'); $('#waitMsg').textContent = res.error || 'ส่งไม่สำเร็จ'; $('#waitSub').textContent = ''; }
+  });
+}
+
+function renderResult(v) {
+  show('sResult');
+  const r = v.result || {};
+  document.body.className = r.correct ? 'ok' : 'bad';
+  $('#rBadge').textContent = r.correct ? '✔' : (r.answered ? '✘' : '⌛');
+  $('#rMsg').textContent = r.correct ? 'ถูกต้อง!' : (r.answered ? 'ยังไม่ถูกนะ' : 'หมดเวลา');
+  $('#rPts').textContent = '+' + fmt(r.points);
+  $('#rStreak').textContent = r.correct && v.streak >= 2 ? `🔥 ตอบถูกติดกัน ${v.streak} ข้อ` : '';
+  $('#rCorrect').textContent = r.correct ? '' : `คำตอบที่ถูก: ${v.correctText}`;
+  $('#rRank').textContent = v.rank ? (v.rank === 1 ? `🏆 คุณอยู่อันดับ 1 จาก ${v.playerCount} คน!` : `อันดับ ${v.rank} จาก ${v.playerCount}` + (v.behind ? ` • ตามหลัง ${v.behind.name} อยู่ ${fmt(v.behind.diff)} คะแนน` : '')) : '';
+}
+
+function renderEnd(v) {
+  show('sEnd');
+  $('#eRank').textContent = '#' + v.rank;
+  $('#eOf').textContent = `จากผู้เล่น ${v.playerCount} คน`;
+  $('#eScore').textContent = fmt(v.score) + ' คะแนน';
+  $('#eCorrect').textContent = `ตอบถูก ${v.correctCount}/${v.total} ข้อ`;
+  const medals = ['🥇', '🥈', '🥉'], order = [1, 0, 2], h = [120, 90, 70];
+  $('#ePodium').innerHTML = order.filter(i => v.podium[i]).map(i =>
+    `<div style="height:${h[i]}px">${medals[i]}<br><span>${esc(v.podium[i].name)}</span></div>`).join('');
+}
+</script>
+</body>
+</html>

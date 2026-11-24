@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>QuizLive — ผู้จัดกิจกรรม</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  body{min-height:100vh}
+  .top{display:flex;align-items:center;gap:14px;padding:12px 22px;background:rgba(0,0,0,.2)}
+  .top .brand{font-size:1.5em}
+  .top .sp{flex:1}
+  .wrap{max-width:1080px;margin:0 auto;padding:24px}
+  h2{margin:.2em 0 .6em}
+  /* library */
+  .lib{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+  .qz{display:flex;flex-direction:column;gap:10px}
+  .qz h3{margin:0;font-size:1.25em}
+  .qz .meta{color:var(--muted)}
+  .qz .row{display:flex;gap:8px;flex-wrap:wrap}
+  .empty{opacity:.8;text-align:center;padding:40px}
+  /* editor */
+  .ed input[type=text],.ed textarea,.ed select{width:100%;padding:.55em .7em;border:2px solid #dde;border-radius:8px;outline:none;background:#fff;color:var(--ink)}
+  .ed input:focus,.ed textarea:focus{border-color:var(--bg2)}
+  .ed .title{font-size:1.4em;font-weight:600}
+  .qcard{margin-top:16px;position:relative}
+  .qcard .head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+  .qcard .head b{background:var(--bg2);color:#fff;border-radius:8px;padding:2px 10px}
+  .qcard .head .sp{flex:1}
+  .qcard .head button{background:#eef;box-shadow:none;padding:.35em .7em}
+  .qcard textarea{font-size:1.15em;font-weight:500;resize:vertical;min-height:2.6em}
+  .opts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
+  .opt{display:flex;align-items:center;gap:8px;border-radius:8px;padding:6px 8px;color:#fff}
+  .opt.o0{background:var(--c0)}.opt.o1{background:var(--c1)}.opt.o2{background:var(--c2)}.opt.o3{background:var(--c3)}
+  .opt input[type=text]{border:0;flex:1}
+  .opt label{display:flex;align-items:center;gap:4px;font-size:.9em;white-space:nowrap;cursor:pointer}
+  .opt input[type=checkbox]{width:20px;height:20px;accent-color:#fff}
+  .settings{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .settings>*{flex:1;min-width:150px}
+  .settings label{font-size:.85em;color:var(--muted);display:block}
+  .thumb{max-height:90px;border-radius:6px;margin-top:6px}
+  .bar-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px;position:sticky;bottom:0;padding:12px 0;background:linear-gradient(transparent,var(--bg) 30%)}
+  .warn{color:var(--bad);font-size:.9em}
+  dialog{border:0;border-radius:14px;padding:22px;max-width:760px;width:94vw}
+  dialog::backdrop{background:#0008}
+  dialog textarea{width:100%;min-height:220px;font-family:monospace;font-size:.95em;padding:10px;border:2px solid #dde;border-radius:8px}
+  dialog code{background:#f2f2f7;padding:1px 5px;border-radius:4px}
+  /* game */
+  .game{min-height:100vh;display:flex;flex-direction:column}
+  .gbar{display:flex;align-items:center;gap:16px;padding:10px 22px;background:rgba(0,0,0,.25);font-weight:600}
+  .gbar .sp{flex:1}
+  .gmain{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px 28px;gap:20px}
+  .joinbox{display:flex;gap:28px;align-items:center;background:#fff;color:var(--ink);border-radius:16px;padding:20px 30px}
+  .joinbox .url{font-size:1.4em}
+  .joinbox .url b{color:var(--bg2)}
+  .joinbox .pinbig{font-size:5em;font-weight:800;letter-spacing:4px;line-height:1}
+  .joinbox img{width:190px;height:190px}
+  .count{font-size:1.6em;font-weight:700;display:flex;align-items:center;gap:20px}
+  .chips{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;max-width:1100px}
+  .chip{background:#fff;color:var(--ink);border-radius:8px;padding:6px 14px;font-weight:600;font-size:1.15em;animation:pop .35s both;cursor:pointer}
+  .chip.off{opacity:.45}
+  .chip:hover{background:var(--bad);color:#fff;text-decoration:line-through}
+  .qbig{background:#fff;color:var(--ink);border-radius:14px;padding:22px 30px;font-size:2.3em;font-weight:700;text-align:center;width:min(1200px,96vw);line-height:1.3}
+  .qmid{display:flex;align-items:center;justify-content:space-between;width:min(1200px,96vw);gap:20px}
+  .qmid img{max-height:34vh;max-width:60%;border-radius:12px}
+  .qmid .stat{font-size:1.4em;font-weight:700;text-align:center}
+  .qmid .stat big{display:block;font-size:2.2em}
+  .gtiles{width:min(1200px,96vw)}
+  .gtiles .tile{font-size:1.7em;min-height:100px}
+  .chart{display:flex;gap:26px;align-items:flex-end;height:30vh;min-height:180px}
+  .chart .col{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;width:110px}
+  .chart .col i{display:block;width:100%;border-radius:8px 8px 0 0;transition:height .6s ease;min-height:6px}
+  .chart .col .lbl{display:flex;align-items:center;gap:6px;font-size:1.5em;font-weight:800;margin-bottom:6px}
+  .chart .col .bt{width:100%;display:flex;justify-content:center;padding:6px;border-radius:0 0 8px 8px}
+  .preview .bar{width:min(900px,90vw);height:14px}
+  /* podium */
+  .pod{display:flex;align-items:flex-end;gap:18px;height:46vh;min-height:300px}
+  .pod .p{width:230px;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;opacity:0}
+  .pod .p.in{animation:rise .8s ease forwards}
+  .pod .p .nm{font-size:1.6em;font-weight:700;text-align:center;margin-bottom:6px;word-break:break-word}
+  .pod .p .sc{font-size:1.1em;opacity:.9;margin-bottom:8px}
+  .pod .p .blk{width:100%;border-radius:10px 10px 0 0;display:flex;justify-content:center;padding-top:14px;font-size:3.4em;background:rgba(255,255,255,.18)}
+  .pod .p1 .blk{background:var(--accent);height:62%}.pod .p2 .blk{height:44%;background:#cfd5e1}.pod .p3 .blk{height:30%;background:#d99a5b}
+  @keyframes rise{from{opacity:0;transform:translateY(60px)}to{opacity:1;transform:none}}
+  table.res{width:100%;border-collapse:collapse;color:var(--ink)}
+  table.res th,table.res td{padding:8px 10px;border-bottom:1px solid #e6e6ef;text-align:left}
+  table.res th{background:#f4f2fb;position:sticky;top:0}
+  table.res td.num,table.res th.num{text-align:right}
+  .scroll{max-height:56vh;overflow:auto;border-radius:10px}
+  .tabs{display:flex;gap:8px;margin-bottom:12px}
+  .tabs button.on{background:var(--bg2);color:#fff}
+  .pbar{display:inline-block;height:10px;border-radius:5px;background:var(--ok);vertical-align:middle}
+  .confetti{position:fixed;inset:0;pointer-events:none;z-index:5}
+</style>
+</head>
+<body>
+
+<!-- ===================== คลังแบบทดสอบ ===================== -->
+<div id="vLib">
+  <div class="top"><span class="brand">Quiz<b>Live</b></span><span>สำหรับผู้จัดกิจกรรม</span><span class="sp"></span>
+    <button class="ghost small" id="btnImportFile">นำเข้าไฟล์ (.json)</button>
+    <button class="go" id="btnNew">+ สร้างแบบทดสอบใหม่</button>
+    <input type="file" id="fileIn" accept=".json,application/json" class="hidden">
+  </div>
+  <div class="wrap">
+    <h2>แบบทดสอบของฉัน</h2>
+    <div class="lib" id="libList"></div>
+    <p style="opacity:.7;font-size:.9em;margin-top:30px">แบบทดสอบถูกบันทึกไว้ในเบราว์เซอร์เครื่องนี้ — แนะนำกด “ส่งออก” เก็บไฟล์สำรองไว้ เพื่อใช้กับเครื่องอื่นหรือกันข้อมูลหาย</p>
+  </div>
+</div>
+
+<!-- ===================== แก้ไขแบบทดสอบ ===================== -->
+<div id="vEdit" class="hidden">
+  <div class="top"><span class="brand">Quiz<b>Live</b></span><span>แก้ไขแบบทดสอบ</span><span class="sp"></span>
+    <button class="ghost small" id="btnBulk">วางคำถามจาก Excel</button>
+    <button class="ghost" id="btnCancel">กลับ</button>
+    <button class="go" id="btnSave">บันทึก</button>
+  </div>
+  <div class="wrap ed">
+    <div class="card"><input type="text" class="title" id="edTitle" placeholder="ชื่อแบบทดสอบ เช่น ทบทวนความรู้กฎหมายแรงงาน"></div>
+    <div id="edList"></div>
+    <div class="bar-actions">
+      <button id="btnAddQ">+ เพิ่มคำถาม (4 ตัวเลือก)</button>
+      <button id="btnAddTF">+ เพิ่มคำถาม ถูก/ผิด</button>
+      <span class="sp" style="flex:1"></span>
+      <button class="go" id="btnSave2">บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<dialog id="dlgBulk">
+  <h3 style="margin-top:0">วางคำถามจาก Excel / Google Sheets</h3>
+  <p style="margin:.3em 0">คัดลอกแถวจากตาราง (ไม่ต้องมีหัวตาราง) แล้ววางในช่องด้านล่าง เรียงคอลัมน์ดังนี้:</p>
+  <p><code>คำถาม</code> | <code>ตัวเลือก A</code> | <code>B</code> | <code>C</code> | <code>D</code> | <code>เฉลย</code> (A/B/C/D หรือ 1-4, ถูกหลายข้อใส่ A,C) | <code>เวลา (วินาที)</code> — ไม่บังคับ</p>
+  <textarea id="bulkText" placeholder="ข้อใดคือสีของธงชาติไทย	แดง ขาว น้ำเงิน	แดง เหลือง	เขียว ขาว	ดำ ขาว	A	20"></textarea>
+  <p id="bulkMsg" class="warn"></p>
+  <div style="display:flex;gap:10px;justify-content:flex-end">
+    <button id="bulkCancel">ยกเลิก</button>
+    <button class="primary" id="bulkOk">เพิ่มคำถาม</button>
+  </div>
+</dialog>
+
+<dialog id="dlgStart">
+  <h3 style="margin-top:0" id="stTitle">เริ่มเกม</h3>
+  <label style="display:flex;gap:10px;align-items:center;font-size:1.05em;margin:10px 0"><input type="checkbox" id="stDevice" checked style="width:20px;height:20px">
+    แสดงคำถามและตัวเลือกบนมือถือผู้เล่นด้วย</label>
+  <p style="color:var(--muted);margin:.2em 0 1em;font-size:.92em">แนะนำให้เปิดไว้ หากผู้เล่นมองจอใหญ่ไม่ชัด หรือเล่นผ่านออนไลน์ (Zoom / Teams) — ถ้าปิด มือถือจะแสดงแค่ปุ่มรูปทรงสีแบบ Kahoot</p>
+  <div style="display:flex;gap:10px;justify-content:flex-end">
+    <button id="stCancel">ยกเลิก</button>
+    <button class="go" id="stOk">สร้างห้องเกม</button>
+  </div>
+</dialog>
+
+<!-- ===================== หน้าจอเกม (ฉายขึ้นจอ) ===================== -->
+<div id="vGame" class="game hidden">
+  <div class="gbar">
+    <span class="brand">Quiz<b>Live</b></span><span id="gTitle"></span><span class="sp"></span>
+    <span id="gPinSmall"></span>
+    <button class="ghost small" id="gFull" title="เต็มจอ">⛶ เต็มจอ</button>
+    <button class="ghost small" id="gEnd">จบเกม</button>
+  </div>
+  <div class="gmain" id="gMain"></div>
+</div>
+<canvas class="confetti hidden" id="confetti"></canvas>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="common.js"></script>
+<script>
+/* ---------------- คลังแบบทดสอบ (เก็บใน localStorage) ---------------- */
+const LS = 'ql_quizzes';
+const uid = () => Math.random().toString(36).slice(2, 10);
+const loadQuizzes = () => { try { return JSON.parse(localStorage.getItem(LS)) || []; } catch { return []; } };
+const saveQuizzes = list => { try { localStorage.setItem(LS, JSON.stringify(list)); return true; } catch (e) { alert('บันทึกไม่สำเร็จ: พื้นที่เบราว์เซอร์เต็ม (รูปภาพอาจใหญ่เกินไป ลองใช้ลิงก์รูปแทน)'); return false; } };
+const newQ = (tf) => tf
+  ? { text: '', image: '', options: ['ถูก', 'ผิด', '', ''], correct: [0], time: 20, points: 1000 }
+  : { text: '', image: '', options: ['', '', '', ''], correct: [], time: 20, points: 1000 };
+
+if (!localStorage.getItem(LS)) saveQuizzes([{
+  id: uid(), title: 'ตัวอย่าง: ความรู้รอบตัว', updated: Date.now(), questions: [
+    { text: 'ประเทศไทยมีทั้งหมดกี่จังหวัด (รวมกรุงเทพฯ)', image: '', options: ['76', '77', '78', '75'], correct: [1], time: 20, points: 1000 },
+    { text: 'ดาวเคราะห์ดวงใดใหญ่ที่สุดในระบบสุริยะ', image: '', options: ['โลก', 'ดาวเสาร์', 'ดาวพฤหัสบดี', 'ดาวอังคาร'], correct: [2], time: 20, points: 1000 },
+    { text: 'น้ำเดือดที่อุณหภูมิ 100 องศาเซลเซียส (ที่ระดับน้ำทะเล)', image: '', options: ['ถูก', 'ผิด', '', ''], correct: [0], time: 10, points: 1000 },
+    { text: '1 ปีมีกี่สัปดาห์ (โดยประมาณ)', image: '', options: ['48', '50', '52', '54'], correct: [2], time: 15, points: 2000 },
+  ]
+}]);
+
+function renderLib() {
+  const list = loadQuizzes().sort((a, b) => b.updated - a.updated);
+  $('#libList').innerHTML = list.length ? list.map(q => `
+    <div class="card qz">
+      <h3>${esc(q.title || 'ไม่มีชื่อ')}</h3>
+      <div class="meta">${q.questions.length} คำถาม • แก้ไขล่าสุด ${new Date(q.updated).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })}</div>
+      <div class="row">
+        <button class="go" data-a="play" data-id="${q.id}">▶ เริ่มเกม</button>
+        <button data-a="edit" data-id="${q.id}">แก้ไข</button>
+        <button data-a="dup" data-id="${q.id}" class="small">ทำสำเนา</button>
+        <button data-a="exp" data-id="${q.id}" class="small">ส่งออก</button>
+        <button data-a="del" data-id="${q.id}" class="small danger">ลบ</button>
+      </div>
+    </div>`).join('') : '<div class="empty">ยังไม่มีแบบทดสอบ กด “สร้างแบบทดสอบใหม่” เพื่อเริ่ม</div>';
+}
+$('#libList').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const list = loadQuizzes(), q = list.find(x => x.id === b.dataset.id);
+  if (!q) return;
+  if (b.dataset.a === 'play') openStart(q);
+  if (b.dataset.a === 'edit') openEditor(q);
+  if (b.dataset.a === 'dup') { saveQuizzes([...list, { ...JSON.parse(JSON.stringify(q)), id: uid(), title: q.title + ' (สำเนา)', updated: Date.now() }]); renderLib(); }
+  if (b.dataset.a === 'exp') download(`${q.title || 'quiz'}.json`, JSON.stringify({ title: q.title, questions: q.questions }, null, 2), 'application/json');
+  if (b.dataset.a === 'del' && confirm(`ลบ “${q.title}” ใช่ไหม?`)) { saveQuizzes(list.filter(x => x.id !== q.id)); renderLib(); }
+};
+$('#btnNew').onclick = () => openEditor({ id: uid(), title: '', questions: [newQ()], updated: Date.now() });
+$('#btnImportFile').onclick = () => $('#fileIn').click();
+$('#fileIn').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const d = JSON.parse(await f.text());
+    const arr = Array.isArray(d) ? d : [d];
+    const list = loadQuizzes();
+    arr.forEach(x => { if (Array.isArray(x.questions)) list.push({ id: uid(), title: x.title || f.name.replace(/\.json$/, ''), questions: x.questions, updated: Date.now() }); });
+    saveQuizzes(list); renderLib();
+  } catch { alert('ไฟล์ไม่ถูกต้อง'); }
+  e.target.value = '';
+};
+function download(name, content, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], { type }));
+  a.download = name.replace(/[\\/:*?"<>|]/g, '_'); a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+/* ---------------- ตัวแก้ไข ---------------- */
+let editing = null;
+function view(id) { ['vLib', 'vEdit', 'vGame'].forEach(v => $('#' + v).classList.toggle('hidden', v !== id)); }
+function openEditor(q) { editing = JSON.parse(JSON.stringify(q)); $('#edTitle').value = editing.title; renderEditor(); view('vEdit'); window.scrollTo(0, 0); }
+
+function renderEditor() {
+  const L = 'ABCD';
+  $('#edList').innerHTML = editing.questions.map((q, i) => {
+    const warn = [];
+    if (!q.text.trim()) warn.push('ยังไม่มีคำถาม');
+    if (q.options.filter(o => o.trim()).length < 2) warn.push('ต้องมีตัวเลือกอย่างน้อย 2 ข้อ');
+    if (!q.correct.some(c => (q.options[c] || '').trim())) warn.push('ยังไม่ได้เลือกเฉลย');
+    return `<div class="card qcard" data-i="${i}">
+      <div class="head"><b>ข้อ ${i + 1}</b><span class="warn">${warn.join(' • ')}</span><span class="sp"></span>
+        <button data-a="up" title="เลื่อนขึ้น">↑</button><button data-a="down" title="เลื่อนลง">↓</button>
+        <button data-a="copy" title="ทำสำเนา">⧉</button><button data-a="rm" title="ลบ">🗑</button></div>
+      <textarea data-f="text" rows="2" placeholder="พิมพ์คำถาม...">${esc(q.text)}</textarea>
+      <div class="opts">${[0, 1, 2, 3].map(j => `
+        <div class="opt o${j}">${SHAPES[j]}<input type="text" data-f="opt" data-j="${j}" value="${esc(q.options[j])}" placeholder="ตัวเลือก ${L[j]}${j > 1 ? ' (ไม่บังคับ)' : ''}">
+          <label><input type="checkbox" data-f="cor" data-j="${j}" ${q.correct.includes(j) ? 'checked' : ''}>ถูก</label></div>`).join('')}
+      </div>
+      <div class="settings">
+        <div><label>เวลาตอบ</label><select data-f="time">${[5, 10, 15, 20, 30, 45, 60, 90, 120].map(t => `<option value="${t}" ${q.time == t ? 'selected' : ''}>${t} วินาที</option>`).join('')}</select></div>
+        <div><label>คะแนน</label><select data-f="points">${[[1000, 'ปกติ (1,000)'], [2000, 'สองเท่า (2,000)'], [0, 'ไม่คิดคะแนน']].map(([v, t]) => `<option value="${v}" ${q.points == v ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+        <div style="flex:2"><label>รูปภาพประกอบ (ไม่บังคับ) — วางลิงก์ หรือ อัปโหลด</label>
+          <div style="display:flex;gap:6px"><input type="text" data-f="image" value="${q.image.startsWith('data:') ? '(รูปที่อัปโหลด)' : esc(q.image)}" placeholder="https://...">
+          <button class="small" data-a="upload">อัปโหลด</button>${q.image ? '<button class="small" data-a="noimg">ลบรูป</button>' : ''}</div>
+          ${q.image ? `<img class="thumb" src="${esc(q.image)}">` : ''}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+$('#edList').addEventListener('input', e => {
+  const card = e.target.closest('.qcard'); if (!card) return;
+  const q = editing.questions[card.dataset.i], f = e.target.dataset.f;
+  if (f === 'text') q.text = e.target.value;
+  if (f === 'opt') q.options[e.target.dataset.j] = e.target.value;
+  if (f === 'image' && e.target.value !== '(รูปที่อัปโหลด)') q.image = e.target.value.trim();
+});
+$('#edList').addEventListener('change', e => {
+  const card = e.target.closest('.qcard'); if (!card) return;
+  const q = editing.questions[card.dataset.i], f = e.target.dataset.f;
+  if (f === 'cor') { const j = +e.target.dataset.j; q.correct = e.target.checked ? [...new Set([...q.correct, j])] : q.correct.filter(x => x !== j); }
+  if (f === 'time') q.time = +e.target.value;
+  if (f === 'points') q.points = +e.target.value;
+  if (f === 'cor' || f === 'image') renderEditorKeepFocus();
+});
+function renderEditorKeepFocus() { const y = window.scrollY; renderEditor(); window.scrollTo(0, y); }
+$('#edList').addEventListener('click', e => {
+  const b = e.target.closest('button[data-a]'); if (!b) return;
+  const i = +b.closest('.qcard').dataset.i, qs = editing.questions;
+  const a = b.dataset.a;
+  if (a === 'up' && i > 0) [qs[i - 1], qs[i]] = [qs[i], qs[i - 1]];
+  if (a === 'down' && i < qs.length - 1) [qs[i + 1], qs[i]] = [qs[i], qs[i + 1]];
+  if (a === 'copy') qs.splice(i + 1, 0, JSON.parse(JSON.stringify(qs[i])));
+  if (a === 'rm' && confirm('ลบคำถามข้อนี้?')) qs.splice(i, 1);
+  if (a === 'noimg') qs[i].image = '';
+  if (a === 'upload') return pickImage(i);
+  renderEditorKeepFocus();
+});
+function pickImage(i) {
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
+  inp.onchange = () => {
+    const f = inp.files[0]; if (!f) return;
+    const img = new Image();
+    img.onload = () => { // ย่อรูปให้เล็กลงก่อนเก็บ
+      const max = 1000, s = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas'); c.width = img.width * s; c.height = img.height * s;
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      editing.questions[i].image = c.toDataURL('image/jpeg', 0.8); renderEditorKeepFocus();
+    };
+    img.src = URL.createObjectURL(f);
+  };
+  inp.click();
+}
+$('#btnAddQ').onclick = () => { editing.questions.push(newQ()); renderEditor(); window.scrollTo(0, document.body.scrollHeight); };
+$('#btnAddTF').onclick = () => { editing.questions.push(newQ(true)); renderEditor(); window.scrollTo(0, document.body.scrollHeight); };
+$('#btnCancel').onclick = () => { if (confirm('กลับไปหน้าคลังแบบทดสอบ? (การแก้ไขที่ยังไม่บันทึกจะหายไป)')) { view('vLib'); renderLib(); } };
+$('#btnSave').onclick = $('#btnSave2').onclick = () => {
+  editing.title = $('#edTitle').value.trim() || 'แบบทดสอบไม่มีชื่อ';
+  editing.updated = Date.now();
+  const list = loadQuizzes(), k = list.findIndex(x => x.id === editing.id);
+  if (k >= 0) list[k] = editing; else list.push(editing);
+  if (saveQuizzes(list)) { view('vLib'); renderLib(); }
+};
+$('#edTitle').oninput = e => editing.title = e.target.value;
+
+// วางจาก Excel
+$('#btnBulk').onclick = () => { $('#bulkText').value = ''; $('#bulkMsg').textContent = ''; $('#dlgBulk').showModal(); };
+$('#bulkCancel').onclick = () => $('#dlgBulk').close();
+$('#bulkOk').onclick = () => {
+  const rows = $('#bulkText').value.split(/\r?\n/).map(r => r.split('\t')).filter(r => r.join('').trim());
+  const out = [], bad = [];
+  rows.forEach((r, n) => {
+    const [text, a, b, c, d, ans, time] = r.map(x => (x || '').trim());
+    const options = [a || '', b || '', c || '', d || ''];
+    const correct = String(ans || '').toUpperCase().split(/[,\s/]+/).filter(Boolean).map(x => 'ABCD'.indexOf(x) >= 0 ? 'ABCD'.indexOf(x) : (+x - 1)).filter(x => x >= 0 && x < 4 && options[x]);
+    if (!text || options.filter(Boolean).length < 2 || !correct.length) { bad.push(n + 1); return; }
+    out.push({ text, image: '', options, correct, time: Math.min(240, Math.max(5, +time || 20)), points: 1000 });
+  });
+  if (!out.length) return ($('#bulkMsg').textContent = 'ไม่พบแถวที่ถูกต้อง — ตรวจสอบว่าคั่นคอลัมน์ด้วยการคัดลอกจาก Excel และมีคอลัมน์เฉลย');
+  editing.questions = editing.questions.filter(q => q.text.trim() || q.options.some(o => o.trim())).concat(out);
+  renderEditor(); $('#dlgBulk').close();
+  if (bad.length) alert(`เพิ่ม ${out.length} ข้อ • ข้ามแถวที่ไม่สมบูรณ์: ${bad.join(', ')}`);
+};
+
+/* ---------------- เริ่มเกม ---------------- */
+let startQuiz = null;
+function openStart(q) { startQuiz = q; $('#stTitle').textContent = 'เริ่มเกม: ' + q.title; $('#dlgStart').showModal(); }
+$('#stCancel').onclick = () => $('#dlgStart').close();
+$('#stOk').onclick = () => {
+  $('#dlgStart').close();
+  podiumShown = false; allOpen = false; seenChips.clear(); lastScreen = '';
+  socket.emit('host:create', { quiz: startQuiz, showOnDevice: $('#stDevice').checked }, res => {
+    if (!res.ok) return alert(res.error);
+    sessionStorage.setItem('ql_host', JSON.stringify({ pin: res.pin, hostToken: res.hostToken }));
+    view('vGame');
+  });
+};
+
+/* ---------------- Socket ---------------- */
+const socket = io({ transports: ['websocket', 'polling'] });
+let G = null, gTick = null, lastScreen = '', podiumShown = false, allOpen = false;
+const seenChips = new Set();
+socket.on('connect', () => {
+  const h = JSON.parse(sessionStorage.getItem('ql_host') || 'null');
+  if (h) socket.emit('host:rejoin', h, res => { if (res.ok) view('vGame'); else sessionStorage.removeItem('ql_host'); });
+});
+socket.on('host:state', s => { G = s; syncClock(s.now); renderGame(); });
+socket.on('host:answered', d => { if (G) { G.answered = d.answered; const el = $('#gAns'); if (el) el.textContent = d.answered; } });
+
+const joinUrl = () => location.origin + '/';
+function nextBtn(label, cls = 'primary') { return `<button class="${cls}" id="gNext" style="font-size:1.3em;padding:.7em 1.6em">${label}</button>`; }
+function bindNext() { const b = $('#gNext'); if (b) b.onclick = () => socket.emit('host:next'); }
+document.addEventListener('keydown', e => {
+  if ($('#vGame').classList.contains('hidden') || e.target.matches('input,textarea')) return;
+  if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowRight') { e.preventDefault(); if ($('#gNext')) socket.emit('host:next'); }
+});
+$('#gFull').onclick = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.();
+$('#gEnd').onclick = () => {
+  if (!G) return;
+  if (G.state === 'ended') {
+    if (confirm('ปิดห้องเกมและกลับสู่คลังแบบทดสอบ? (ดาวน์โหลดผลก่อนถ้าต้องการ)')) { socket.emit('host:close'); sessionStorage.removeItem('ql_host'); G = null; view('vLib'); renderLib(); }
+  } else if (confirm('จบเกมตอนนี้และไปหน้าสรุปอันดับ?')) socket.emit('host:end');
+};
+
+function renderGame() {
+  if (!G) return;
+  clearInterval(gTick);
+  $('#gTitle').textContent = G.title;
+  $('#gPinSmall').textContent = G.state !== 'lobby' && G.state !== 'ended' ? `PIN ${G.pin} • ${G.players.length} คน` : '';
+  $('#gEnd').textContent = G.state === 'ended' ? 'ปิดห้อง' : 'จบเกม';
+  const m = $('#gMain'), key = G.state + G.qIndex;
+  m.className = 'gmain';
+  const fresh = key !== lastScreen; lastScreen = key;
+  if (G.state === 'lobby') return renderLobby(m);
+  if (G.state === 'preview') return renderPreview(m);
+  if (G.state === 'question') return renderQuestion(m);
+  if (G.state === 'reveal') return renderReveal(m, fresh);
+  if (G.state === 'leaderboard') return renderBoard(m);
+  if (G.state === 'ended') return renderEnded(m, fresh);
+}
+
+function renderLobby(m) {
+  const url = joinUrl();
+  const online = G.players.filter(p => p.connected).length;
+  m.innerHTML = `
+    <div class="joinbox">
+      <div><div class="url">เข้าร่วมที่ <b>${esc(url.replace(/^https?:\/\//, ''))}</b></div>
+        <div style="color:var(--muted);margin-top:8px">Game PIN:</div>
+        <div class="pinbig">${G.pin.slice(0, 3)} ${G.pin.slice(3)}</div></div>
+      <img src="/qr?text=${encodeURIComponent(url + '?pin=' + G.pin)}" alt="QR">
+    </div>
+    <div class="count">👥 ${G.players.length} คน <span style="font-size:.6em;opacity:.8">(ออนไลน์ ${online})</span>
+      <label style="font-size:.6em;display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="gLock" ${G.locked ? 'checked' : ''}> ล็อกห้อง</label>
+      ${nextBtn('เริ่มเกม ▶', 'go')}</div>
+    <div class="chips">${G.players.length ? G.players.map(p => { const isNew = !seenChips.has(p.id); seenChips.add(p.id); return `<span class="chip ${p.connected ? '' : 'off'}" style="${isNew ? '' : 'animation:none'}" data-id="${p.id}" title="คลิกเพื่อนำออก">${esc(p.name)}</span>`; }).join('') : '<span style="opacity:.75;font-size:1.3em">รอผู้เล่นเข้าร่วม… สแกน QR หรือใส่ PIN</span>'}</div>`;
+  $('#gLock').onchange = e => socket.emit('host:lock', e.target.checked);
+  m.querySelector('.chips').onclick = e => { const c = e.target.closest('.chip'); if (c && confirm(`นำ “${c.textContent}” ออกจากเกม?`)) socket.emit('host:kick', c.dataset.id); };
+  const b = $('#gNext'); b.disabled = !G.players.length; bindNext();
+}
+
+function renderPreview(m) {
+  const q = G.question;
+  m.className = 'gmain preview';
+  m.innerHTML = `<div style="font-size:1.4em;opacity:.85">ข้อ ${q.index + 1} จาก ${q.total}${q.points === 2000 ? ' • ⭐ คะแนน x2' : q.points === 0 ? ' • ไม่คิดคะแนน' : ''}</div>
+    <div class="qbig pop">${esc(q.text)}</div><div class="bar"><i id="pvBar" style="width:0%"></i></div>`;
+  const upd = () => { const p = 1 - Math.max(0, G.openAt - serverTime()) / 3000; $('#pvBar').style.width = Math.min(100, p * 100) + '%'; };
+  upd(); gTick = setInterval(upd, 100);
+}
+
+function tilesHtml(q, reveal) {
+  return `<div class="tiles gtiles">${q.options.map((o, i) => o.trim() ? `<div class="tile o${i} ${reveal && !q.correct.includes(i) ? 'dim' : ''}">${SHAPES[i]}<span>${esc(o)}</span>${reveal && q.correct.includes(i) ? '<span class="tick">✔</span>' : ''}</div>` : '').join('')}</div>`;
+}
+
+function renderQuestion(m) {
+  const q = G.question;
+  m.className = 'gmain';
+  m.innerHTML = `<div class="qbig">${esc(q.text)}</div>
+    <div class="qmid"><div class="timer" id="gTime"></div>
+      ${q.image ? `<img src="${esc(q.image)}">` : '<div style="flex:1"></div>'}
+      <div class="stat"><big id="gAns">${G.answered}</big>คำตอบ<div style="font-size:.6em;opacity:.8">จาก ${G.players.length} คน</div>
+      <button class="ghost small" id="gNext" style="margin-top:10px">ข้าม ⏭</button></div></div>
+    ${tilesHtml(q, false)}`;
+  bindNext();
+  const upd = () => { const s = Math.max(0, Math.ceil((G.endAt - serverTime()) / 1000)); $('#gTime').textContent = s; $('#gTime').style.borderColor = s <= 5 ? 'var(--bad)' : ''; };
+  upd(); gTick = setInterval(upd, 200);
+}
+
+function renderReveal(m, fresh) {
+  const q = G.question, max = Math.max(1, ...G.counts);
+  const pct = G.players.length ? Math.round(G.correctCount / G.players.length * 100) : 0;
+  m.className = 'gmain';
+  m.innerHTML = `<div class="qbig" style="font-size:1.8em">${esc(q.text)}</div>
+    <div style="display:flex;align-items:flex-end;gap:40px">
+      <div class="chart">${q.options.map((o, i) => o.trim() ? `<div class="col"><div class="lbl">${q.correct.includes(i) ? '✔' : ''} ${G.counts[i]}</div>
+        <i class="o${i}" style="background:var(--c${i});height:${fresh ? 0 : G.counts[i] / max * 80}%;opacity:${q.correct.includes(i) ? 1 : .45}" data-h="${G.counts[i] / max * 80}"></i>
+        <div class="bt" style="background:var(--c${i})">${SHAPES[i]}</div></div>` : '').join('')}</div>
+      <div class="stat" style="font-size:1.4em;font-weight:700;text-align:center">ตอบถูก<br><big style="font-size:2.4em;color:var(--accent)">${pct}%</big><div style="font-size:.7em;opacity:.85">${G.correctCount}/${G.players.length} คน</div></div>
+    </div>
+    ${tilesHtml(q, true)}
+    ${nextBtn(q.index + 1 >= q.total ? 'ดูผลสรุปอันดับ 🏆' : 'ถัดไป: อันดับคะแนน ▶')}`;
+  bindNext();
+  if (fresh) requestAnimationFrame(() => setTimeout(() => m.querySelectorAll('.chart i').forEach(i => i.style.height = i.dataset.h + '%'), 30));
+}
+
+function renderBoard(m) {
+  const top = G.ranking.slice(0, 5);
+  m.className = 'gmain';
+  m.innerHTML = `<h1 style="margin:0;font-size:2.6em">🏅 อันดับคะแนน</h1>
+    <ol class="lb">${top.map((r, i) => `<li class="${i === 0 ? 'top' : ''}" style="animation-delay:${i * .08}s"><span class="r">${r.rank}</span><span class="n">${esc(r.name)}${r.streak >= 3 ? ' 🔥' + r.streak : ''}</span><span class="s">${fmt(r.score)}</span></li>`).join('')}</ol>
+    ${nextBtn(`ข้อถัดไป (${G.qIndex + 2}/${G.total}) ▶`)}`;
+  bindNext();
+}
+
+let endTab = 'rank';
+function renderEnded(m, fresh) {
+  m.className = 'gmain';
+  const r = G.ranking, top3 = [r[1], r[0], r[2]];
+  const cls = ['p2', 'p1', 'p3'], medal = ['🥈', '🥇', '🥉'], delay = [1.2, 2.4, 0];
+  m.innerHTML = `<h1 style="margin:0;font-size:2.4em">🏆 สรุปผล: ${esc(G.title)}</h1>
+    <div class="pod">${top3.map((p, i) => p ? `<div class="p ${cls[i]} ${podiumShown ? 'in' : ''}" style="animation-delay:${podiumShown ? 0 : delay[i]}s">
+      <div class="nm">${esc(p.name)}</div><div class="sc">${fmt(p.score)} คะแนน • ถูก ${p.correct}/${G.total}</div><div class="blk">${medal[i]}</div></div>` : '<div class="p" style="width:230px"></div>').join('')}</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+      <button id="gShowAll" class="primary">ดูอันดับทั้งหมด (${r.length} คน)</button>
+      <button id="gCsv" class="go">⬇ ดาวน์โหลดผล (Excel/CSV)</button>
+    </div>
+    <div class="card ${allOpen ? '' : 'hidden'}" id="gAll" style="width:min(1100px,96vw)">
+      <div class="tabs"><button data-t="rank" class="${endTab === 'rank' ? 'on' : ''}">อันดับผู้เล่น</button><button data-t="q" class="${endTab === 'q' ? 'on' : ''}">สรุปรายข้อ</button></div>
+      <div class="scroll" id="gTable"></div>
+    </div>`;
+  if (!podiumShown) {
+    podiumShown = true;
+    m.querySelectorAll('.pod .p').forEach(p => p.classList.add('in'));
+    setTimeout(confetti, 2600);
+  }
+  $('#gShowAll').onclick = () => { allOpen = !allOpen; $('#gAll').classList.toggle('hidden', !allOpen); $('#gAll').scrollIntoView({ behavior: 'smooth' }); };
+  $('#gCsv').onclick = exportCsv;
+  m.querySelector('.tabs').onclick = e => { const b = e.target.closest('button'); if (!b) return; endTab = b.dataset.t; m.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b)); drawTable(); };
+  drawTable();
+}
+function drawTable() {
+  const rep = G.report;
+  if (endTab === 'rank') {
+    $('#gTable').innerHTML = `<table class="res"><tr><th>อันดับ</th><th>ชื่อ</th><th class="num">คะแนน</th><th class="num">ตอบถูก</th></tr>
+      ${G.ranking.map(p => `<tr><td>${p.rank <= 3 ? ['🥇', '🥈', '🥉'][p.rank - 1] : p.rank}</td><td>${esc(p.name)}</td><td class="num">${fmt(p.score)}</td><td class="num">${p.correct}/${G.total}</td></tr>`).join('')}</table>`;
+  } else {
+    $('#gTable').innerHTML = `<table class="res"><tr><th>ข้อ</th><th>คำถาม</th><th class="num">ตอบ</th><th class="num">ถูก</th><th style="width:200px">% ถูก (จากผู้เล่นทั้งหมด)</th></tr>
+      ${rep.questions.map((q, i) => { const p = G.players.length ? Math.round(q.correct / G.players.length * 100) : 0; return `<tr><td>${i + 1}</td><td>${esc(q.text)}</td><td class="num">${q.answered}</td><td class="num">${q.correct}</td><td><span class="pbar" style="width:${p * 1.4}px;background:${p < 50 ? 'var(--bad)' : 'var(--ok)'}"></span> ${p}%</td></tr>`; }).join('')}</table>`;
+  }
+}
+function exportCsv() {
+  const rep = G.report, qn = rep.questions.length;
+  const cell = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const head = ['อันดับ', 'ชื่อ', 'คะแนนรวม', 'ตอบถูก (ข้อ)', ...rep.questions.map((_, i) => `ข้อ ${i + 1}`), ...rep.questions.map((_, i) => `คะแนนข้อ ${i + 1}`)];
+  const L = 'ABCD';
+  const rows = rep.players.map(p => [p.rank, p.name, p.score, p.correct,
+    ...p.answers.map(a => a ? `${L[a.choice]} ${a.correct ? '✔' : '✘'} (${(a.ms / 1000).toFixed(1)}s)` : '-'),
+    ...p.answers.map(a => a ? a.points : 0)]);
+  const qrows = [[], ['สรุปรายข้อ'], ['ข้อ', 'คำถาม', 'จำนวนตอบ', 'ตอบถูก', '% ถูก'],
+    ...rep.questions.map((q, i) => [i + 1, q.text, q.answered, q.correct, G.players.length ? Math.round(q.correct / G.players.length * 100) + '%' : '0%'])];
+  const csv = '﻿' + [[`แบบทดสอบ: ${G.title}`, `วันที่: ${new Date().toLocaleString('th-TH')}`, `ผู้เล่น: ${G.players.length} คน`, `จำนวนข้อ: ${qn}`], [], head, ...rows, ...qrows].map(r => r.map(cell).join(',')).join('\r\n');
+  download(`ผลคะแนน_${G.title}_${new Date().toISOString().slice(0, 10)}.csv`, csv, 'text/csv;charset=utf-8');
+}
+
+function confetti() {
+  const c = $('#confetti'), ctx = c.getContext('2d');
+  c.classList.remove('hidden'); c.width = innerWidth; c.height = innerHeight;
+  const cols = ['#e21b3c', '#1368ce', '#d89e00', '#26890c', '#ffcc00', '#fff'];
+  const ps = Array.from({ length: 220 }, () => ({ x: Math.random() * c.width, y: -20 - Math.random() * c.height, w: 6 + Math.random() * 8, h: 8 + Math.random() * 10, vy: 2 + Math.random() * 4, vx: -1.5 + Math.random() * 3, r: Math.random() * 6, vr: -.2 + Math.random() * .4, c: cols[Math.floor(Math.random() * cols.length)] }));
+  let t = 0;
+  (function f() {
+    ctx.clearRect(0, 0, c.width, c.height);
+    ps.forEach(p => { p.x += p.vx; p.y += p.vy; p.r += p.vr; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.fillStyle = p.c; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); ctx.restore(); });
+    if (++t < 360) requestAnimationFrame(f); else c.classList.add('hidden');
+  })();
+}
+
+renderLib();
+</script>
+</body>
+</html>
