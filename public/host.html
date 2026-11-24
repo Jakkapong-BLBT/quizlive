@@ -118,6 +118,7 @@
   .form input,.form select{padding:.6em .7em;border:2px solid #dde;border-radius:8px;font-size:1em;outline:none;width:100%}
   .form input:focus{border-color:var(--bg2)}
   .row2{display:flex;gap:8px}
+  .row2 select{flex:1.2}.row2 input{flex:1}
   .lbl3{font-size:.85em;color:var(--bg2);margin-top:-4px}
   .exp-soon{color:#b86e00;font-weight:600}.exp-dead{color:var(--bad);font-weight:700}
   .cred{background:#f4f2fb;border-radius:10px;padding:12px;font-family:monospace;font-size:1.05em;white-space:pre-wrap}
@@ -194,9 +195,10 @@
     <label>สิทธิ์</label><select id="uRole"><option value="organizer">ผู้จัด (Organizer)</option><option value="super">Super Admin</option></select>
     <label>อายุการใช้งานบัญชี</label>
     <div class="row2"><select id="uExpSel">
-      <option value="none">ไม่จำกัด</option><option value="3">3 วัน</option><option value="7">7 วัน</option><option value="14">14 วัน</option>
+      <option value="none">ไม่จำกัด</option><option value="days">✏️ ระบุจำนวนวันเอง…</option><option value="3">3 วัน</option><option value="7">7 วัน</option><option value="14">14 วัน</option>
       <option value="15">15 วัน</option><option value="20">20 วัน</option><option value="30">30 วัน</option><option value="60">60 วัน</option><option value="90">90 วัน</option>
-      <option value="date">กำหนดวันสิ้นสุดเอง…</option><option value="keep" id="uExpKeep">คงเดิม</option></select>
+      <option value="date">📅 กำหนดวันสิ้นสุดเอง…</option></select>
+      <input type="number" id="uExpDays" class="hidden" min="1" max="1825" step="1" inputmode="numeric" placeholder="จำนวนวัน เช่น 45">
       <input type="date" id="uExpDate" class="hidden"></div>
     <div class="lbl3" id="uExpInfo"></div>
     <label id="uPwLbl">รหัสผ่านชั่วคราว (ผู้ใช้จะต้องเปลี่ยนเองเมื่อเข้าครั้งแรก)</label>
@@ -824,21 +826,28 @@ function expValue() {
   const v = $('#uExpSel').value;
   if (v === 'keep') return undefined;
   if (v === 'none') return null;
+  if (v === 'days') { const n = parseInt($('#uExpDays').value, 10); return n >= 1 && n <= 1825 ? endOfDayTH(thDateStr(Date.now() + (n - 1) * 864e5)) : NaN; }
   if (v === 'date') return $('#uExpDate').value ? endOfDayTH($('#uExpDate').value) : NaN;
   return endOfDayTH(thDateStr(Date.now() + (+v - 1) * 864e5)); // นับวันนี้เป็นวันที่ 1
 }
 function updExp() {
   $('#uExpDate').classList.toggle('hidden', $('#uExpSel').value !== 'date');
+  $('#uExpDays').classList.toggle('hidden', $('#uExpSel').value !== 'days');
   const v = expValue();
   $('#uExpInfo').textContent = v === undefined ? (editUser && editUser.expiresAt ? 'ปัจจุบัน: ' + expText(editUser.expiresAt) : 'ปัจจุบัน: ไม่จำกัด')
-    : v === null ? 'ใช้งานได้ไม่จำกัด' : Number.isNaN(v) ? 'กรุณาเลือกวันที่' : v < Date.now() ? '⚠️ วันที่ต้องเป็นวันนี้หรืออนาคต'
+    : v === null ? 'ใช้งานได้ไม่จำกัด' : Number.isNaN(v) ? ($('#uExpSel').value === 'days' ? 'กรุณาพิมพ์จำนวนวัน (1–1825)' : 'กรุณาเลือกวันที่') : v < Date.now() ? '⚠️ วันที่ต้องเป็นวันนี้หรืออนาคต'
     : `ใช้งานได้ถึง ${new Date(v).toLocaleString('th-TH', { dateStyle: 'full', timeStyle: 'short' })} (${Math.ceil((v - Date.now()) / 864e5)} วัน)`;
 }
-$('#uExpSel').onchange = updExp; $('#uExpDate').oninput = updExp;
+$('#uExpSel').onchange = () => { updExp(); if ($('#uExpSel').value === 'days') $('#uExpDays').focus(); };
+$('#uExpDate').oninput = updExp; $('#uExpDays').oninput = updExp;
 function openUser(u, focusExp) {
   editUser = u;
   const self = u && u.id === ME.id;
-  $('#uExpKeep').hidden = !u; $('#uExpSel').disabled = !!self;
+  // ตัวเลือก “คงเดิม” มีเฉพาะตอนแก้ไขผู้ใช้ (Safari ซ่อน option ไม่ได้ จึงเพิ่ม/ลบเอง)
+  const keep = $('#uExpSel').querySelector('option[value=keep]');
+  if (u && !keep) $('#uExpSel').add(new Option('คงเดิม', 'keep'));
+  if (!u && keep) keep.remove();
+  $('#uExpDays').value = ''; $('#uExpSel').disabled = !!self;
   $('#uExpSel').value = u ? (focusExp ? '30' : 'keep') : 'none';
   $('#uExpDate').value = thDateStr(Date.now() + 7 * 864e5); $('#uExpDate').min = thDateStr(Date.now());
   setTimeout(updExp);
@@ -858,7 +867,7 @@ $('#uForm').onsubmit = async e => {
   e.preventDefault();
   try {
     const exp = expValue();
-    if (Number.isNaN(exp)) throw new Error('กรุณาเลือกวันสิ้นสุด');
+    if (Number.isNaN(exp)) throw new Error($('#uExpSel').value === 'days' ? 'กรุณาพิมพ์จำนวนวัน (1–1825)' : 'กรุณาเลือกวันสิ้นสุด');
     if (exp && exp < Date.now()) throw new Error('วันสิ้นสุดต้องเป็นวันนี้หรืออนาคต');
     if (editUser) await api('PATCH', '/api/users/' + editUser.id, { displayName: $('#uDisp').value, ...(editUser.id === ME.id ? {} : { role: $('#uRole').value }), ...(exp !== undefined && editUser.id !== ME.id ? { expiresAt: exp } : {}) });
     else {
